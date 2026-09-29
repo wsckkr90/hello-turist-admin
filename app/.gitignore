@@ -1,0 +1,69 @@
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Local configuration
+local.properties
+
+# Android Studio
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Android native build
+.cxx/
+.externalNativeBuild/
+
+# APK / AAB
+*.apk
+*.aab
+*.apks
+*.aar
+
+# Signing keys - NEVER commit
+*.jks
+*.keystore
+
+# Firebase
+google-services.json
+
+# Secrets / environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Kotlin / Java generated files
+*.class
+
+# Temporary files
+*.tmp
+*.temp
+
+# Crash / profiling
+*.hprof
+
+# Build cache
+captures/
+.externalNativeBuild/
+
+# VS Code
+.vscode/
+
+# Kotlin
+.kotlin/
+
+# Compose / Android generated
+generated/
+
+# Backup files
+*.bak
+*~
