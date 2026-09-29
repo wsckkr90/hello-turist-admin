@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
  alias(libs.plugins.android.application)
  alias(libs.plugins.kotlin.android)
@@ -5,7 +7,7 @@ plugins {
 }
 
 val backendPropertiesFile = rootProject.file("backend.properties")
-val backendProperties = java.util.Properties()
+val backendProperties = Properties()
 if (backendPropertiesFile.exists()) {
     backendPropertiesFile.inputStream().use { backendProperties.load(it) }
 }
