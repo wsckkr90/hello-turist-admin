@@ -310,7 +310,7 @@ private fun RejectDialog(
 @Composable private fun NotificationsAdmin(api:ApiClient){
     val scope=rememberCoroutineScope();var rows by remember{mutableStateOf<List<JSONObject>>(emptyList())};var err by remember{mutableStateOf<String?>(null)};var send by remember{mutableStateOf(false)};var userId by remember{mutableStateOf("")};var title by remember{mutableStateOf("")};var body by remember{mutableStateOf("")}
     fun load(){scope.launch{api.get("/admin/notifications?limit=100").onSuccess{rows=extract(it,"notifications");err=null}.onFailure{err=it.message}}};LaunchedEffect(Unit){load()}
-    LazyColumn(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){item{Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text("Notifications",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold);Button({send=true}){Text("Send Notification")}}};err?.let{item{Error(it)}};items(rows){JsonCard("Notification",it)}}}
+    LazyColumn(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){item{Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text("Notifications",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold);Button({send=true}){Text("Send Notification")}}};err?.let{item{Error(it)}};items(rows){JsonCard("Notification",it)}}
     if(send)AlertDialog(onDismissRequest={send=false},title={Text("Send Notification")},text={Column(verticalArrangement=Arrangement.spacedBy(6.dp)){OutlinedTextField(userId,{userId=it},label={Text("User ID")});OutlinedTextField(title,{title=it},label={Text("Title")});OutlinedTextField(body,{body=it},label={Text("Message")},minLines=3)}},confirmButton={Button({scope.launch{api.post("/admin/notifications",JSONObject().put("userId",userId.trim()).put("title",title.trim()).put("body",body.trim())).onSuccess{send=false;load()}.onFailure{err=it.message}}}){Text("Send")}},dismissButton={TextButton({send=false}){Text("Close")}})
 
 @Composable private fun AdminUsersAdmin(api:ApiClient){
@@ -339,6 +339,14 @@ private fun RejectDialog(
 @Composable private fun JsonCard(title:String,j:JSONObject){Card(Modifier.fillMaxWidth()){Column(Modifier.padding(14.dp)){Text(title,fontWeight=FontWeight.Bold);Text(compact(j),color=Color.DarkGray)}}}
 @Composable private fun Error(s:String){Card(colors=CardDefaults.cardColors(containerColor=Color(0xFFFFEAEA))){Text(s,Modifier.padding(14.dp),color=Color(0xFF9A0000))}}
 @Composable private fun Empty(){Card(Modifier.fillMaxWidth()){Text("No records found",Modifier.padding(24.dp),color=Color.Gray)}}
+private fun extractVerificationItems(root:JSONObject):List<JSONObject>{
+    val candidates = listOf("items","requests","verificationRequests")
+    for (key in candidates) {
+        val found = extract(root,key)
+        if (found.isNotEmpty()) return found
+    }
+    return emptyList()
+}
 private fun extract(root:JSONObject,key:String):List<JSONObject>{val out=mutableListOf<JSONObject>();val data=root.optJSONObject("data");val a=root.optJSONArray(key)?:data?.optJSONArray(key);if(a!=null)for(i in 0 until a.length())a.optJSONObject(i)?.let{out.add(it)};return out}
 private fun pretty(j:JSONObject)=j.optString("name").ifBlank{j.optString("title").ifBlank{j.optString("code").ifBlank{j.optString("id","Record")}}}
 private fun compact(j:JSONObject):String{val p=mutableListOf<String>();for(k in j.keys()){val v=j.opt(k);if(v !is JSONObject&&v !is JSONArray)p.add(k+"="+v)};return p.take(8).joinToString(" • ")}
