@@ -26,11 +26,241 @@ private enum class Section(val title:String,val icon:androidx.compose.ui.graphic
 @Composable private fun Login(api:ApiClient,onLogin:()->Unit){val scope=rememberCoroutineScope();var id by remember{mutableStateOf("")};var pass by remember{mutableStateOf("")};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf<String?>(null)};Box(Modifier.fillMaxSize().background(Navy),contentAlignment=Alignment.Center){Card(Modifier.padding(24.dp).fillMaxWidth().widthIn(max=460.dp)){Column(Modifier.padding(28.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){Text("HELLO KURUKSHETRA",color=Navy,fontWeight=FontWeight.Bold);Text("Admin Control Center",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold);Text("Secure administrator sign-in",color=Color.Gray);OutlinedTextField(id,{id=it},label={Text("Username or email")},singleLine=true,modifier=Modifier.fillMaxWidth());OutlinedTextField(pass,{pass=it},label={Text("Password")},singleLine=true,visualTransformation=androidx.compose.ui.text.input.PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth());error?.let{Text(it,color=MaterialTheme.colorScheme.error)};Button(onClick={if(id.isBlank()||pass.isBlank()){error="Enter username and password";return@Button};busy=true;scope.launch{api.login(id,pass).onSuccess{root->val d=root.optJSONObject("data")?:JSONObject();api.saveSession(d);api.get("/admin/analytics").onSuccess{onLogin()}.onFailure{api.logout();error="Account does not have active admin access."}}.onFailure{error=it.message};busy=false}},enabled=!busy,colors=ButtonDefaults.buttonColors(containerColor=Yellow,contentColor=Navy),modifier=Modifier.fillMaxWidth().height(52.dp)){if(busy)CircularProgressIndicator(strokeWidth=2.dp,modifier=Modifier.size(22.dp))else Text("SIGN IN",fontWeight=FontWeight.Bold)}}}}}
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable private fun Shell(api:ApiClient,logout:()->Unit){var section by remember{mutableStateOf(Section.DASHBOARD)};var open by remember{mutableStateOf(false)};val drawerState=rememberDrawerState(DrawerValue.Closed);LaunchedEffect(open){if(open)drawerState.open() else drawerState.close()};ModalNavigationDrawer(drawerState=drawerState,drawerContent={ModalDrawerSheet{Column(Modifier.background(Navy).fillMaxHeight().width(300.dp).padding(16.dp)){Text("Hello Kurukshetra",color=Yellow,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold);Text("ADMIN PANEL",color=Color.White);Spacer(Modifier.height(20.dp));Section.values().forEach{item->NavigationDrawerItem(label={Text(item.title)},selected=section==item,onClick={section=item;open=false},icon={Icon(item.icon,null)},colors=NavigationDrawerItemDefaults.colors(selectedContainerColor=Yellow,selectedTextColor=Navy,selectedIconColor=Navy,unselectedTextColor=Color.White,unselectedIconColor=Color.White))};Spacer(Modifier.weight(1f));NavigationDrawerItem(label={Text("Logout")},selected=false,onClick=logout,icon={Icon(Icons.Default.Logout,null)})}}}){Scaffold(topBar={TopAppBar(title={Text(section.title,fontWeight=FontWeight.Bold)},navigationIcon={IconButton({open=true}){Icon(Icons.Default.Menu,"Menu")}},actions={IconButton(logout){Icon(Icons.Default.Logout,"Logout")}},colors=TopAppBarDefaults.topAppBarColors(containerColor=Navy,titleContentColor=Color.White,navigationIconContentColor=Color.White,actionIconContentColor=Color.White))}){p->Box(Modifier.padding(p).fillMaxSize()){when(section){Section.DASHBOARD->Dashboard(api);Section.PEOPLE->ListScreen(api,"People","/admin/people?limit=50","items");Section.VERIFICATION->ActionList(api,"Verification","/admin/verification/requests?limit=50","items","Approve" to {id->api.patch("/admin/verification/requests/"+id,JSONObject().put("status","VERIFIED"))});Section.RIDES->ActionList(api,"Operational Rides","/admin/rides?limit=50","items","Cancel" to {id->api.post("/admin/rides/"+id+"/cancel",JSONObject().put("reason","Admin cancellation"))});Section.PAYMENTS->ActionList(api,"Payments","/admin/finance/payments?limit=50","items","Refund" to {id->api.post("/admin/finance/payments/"+id+"/refund",JSONObject().put("reason","Admin refund"))});Section.EMERGENCY->ActionList(api,"Emergency Incidents","/admin/emergency/incidents?limit=100","items","Acknowledge" to {id->api.post("/admin/emergency/incidents/"+id+"/acknowledge")},"Escalate" to {id->api.post("/admin/emergency/incidents/"+id+"/escalate")},"Resolve" to {id->api.post("/admin/emergency/incidents/"+id+"/resolve")});Section.SUPPORT->ListScreen(api,"Support Tickets","/admin/support/tickets?limit=50","items");Section.PROMOTIONS->ListScreen(api,"Promotions","/admin/promotions?limit=50","items");Section.NOTIFICATIONS->ListScreen(api,"Notifications","/admin/notifications?limit=50","notifications");Section.SETTINGS->Settings(api)}}}}}
+@Composable private fun Shell(api:ApiClient,logout:()->Unit){var section by remember{mutableStateOf(Section.DASHBOARD)};var open by remember{mutableStateOf(false)};val drawerState=rememberDrawerState(DrawerValue.Closed);LaunchedEffect(open){if(open)drawerState.open() else drawerState.close()};ModalNavigationDrawer(drawerState=drawerState,drawerContent={ModalDrawerSheet{Column(Modifier.background(Navy).fillMaxHeight().width(300.dp).padding(16.dp)){Text("Hello Kurukshetra",color=Yellow,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold);Text("ADMIN PANEL",color=Color.White);Spacer(Modifier.height(20.dp));Section.values().forEach{item->NavigationDrawerItem(label={Text(item.title)},selected=section==item,onClick={section=item;open=false},icon={Icon(item.icon,null)},colors=NavigationDrawerItemDefaults.colors(selectedContainerColor=Yellow,selectedTextColor=Navy,selectedIconColor=Navy,unselectedTextColor=Color.White,unselectedIconColor=Color.White))};Spacer(Modifier.weight(1f));NavigationDrawerItem(label={Text("Logout")},selected=false,onClick=logout,icon={Icon(Icons.Default.Logout,null)})}}}){Scaffold(topBar={TopAppBar(title={Text(section.title,fontWeight=FontWeight.Bold)},navigationIcon={IconButton({open=true}){Icon(Icons.Default.Menu,"Menu")}},actions={IconButton(logout){Icon(Icons.Default.Logout,"Logout")}},colors=TopAppBarDefaults.topAppBarColors(containerColor=Navy,titleContentColor=Color.White,navigationIconContentColor=Color.White,actionIconContentColor=Color.White))}){p->Box(Modifier.padding(p).fillMaxSize()){when(section){Section.DASHBOARD->Dashboard(api);Section.PEOPLE->ListScreen(api,"People","/admin/people?limit=50","items");Section.VERIFICATION->DriverVerification(api);Section.RIDES->ActionList(api,"Operational Rides","/admin/rides?limit=50","items","Cancel" to {id->api.post("/admin/rides/"+id+"/cancel",JSONObject().put("reason","Admin cancellation"))});Section.PAYMENTS->ActionList(api,"Payments","/admin/finance/payments?limit=50","items","Refund" to {id->api.post("/admin/finance/payments/"+id+"/refund",JSONObject().put("reason","Admin refund"))});Section.EMERGENCY->ActionList(api,"Emergency Incidents","/admin/emergency/incidents?limit=100","items","Acknowledge" to {id->api.post("/admin/emergency/incidents/"+id+"/acknowledge")},"Escalate" to {id->api.post("/admin/emergency/incidents/"+id+"/escalate")},"Resolve" to {id->api.post("/admin/emergency/incidents/"+id+"/resolve")});Section.SUPPORT->ListScreen(api,"Support Tickets","/admin/support/tickets?limit=50","items");Section.PROMOTIONS->ListScreen(api,"Promotions","/admin/promotions?limit=50","items");Section.NOTIFICATIONS->ListScreen(api,"Notifications","/admin/notifications?limit=50","notifications");Section.SETTINGS->Settings(api)}}}}}
 
 @Composable private fun Dashboard(api:ApiClient){var data by remember{mutableStateOf<JSONObject?>(null)};var err by remember{mutableStateOf<String?>(null)};LaunchedEffect(Unit){api.get("/admin/analytics").onSuccess{data=it}.onFailure{err=it.message}};val k=data?.optJSONObject("kpis");LazyColumn(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){item{Text("Operations overview",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold)};err?.let{item{Error(it)}};item{Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Kpi("Users",k?.optInt("users",0)?:0,Modifier.weight(1f));Kpi("Active",k?.optInt("activeUsers",0)?:0,Modifier.weight(1f))}};item{Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Kpi("Drivers",k?.optInt("approvedDrivers",0)?:0,Modifier.weight(1f));Kpi("Guides",k?.optInt("approvedGuides",0)?:0,Modifier.weight(1f))}};item{Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Kpi("Rides",k?.optInt("rides",0)?:0,Modifier.weight(1f));Kpi("Payments",k?.optInt("payments",0)?:0,Modifier.weight(1f))}};item{Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Kpi("Verification",k?.optInt("verificationRequests",0)?:0,Modifier.weight(1f));Kpi("Support",k?.optInt("supportTickets",0)?:0,Modifier.weight(1f))}};item{Breakdown("Ride status",data?.optJSONObject("breakdowns")?.optJSONObject("rides"))};item{Breakdown("Payment status",data?.optJSONObject("breakdowns")?.optJSONObject("payments"))};item{Breakdown("Verification status",data?.optJSONObject("breakdowns")?.optJSONObject("verificationRequests"))}}}
 
 @Composable private fun ListScreen(api:ApiClient,title:String,endpoint:String,key:String){var rows by remember{mutableStateOf<List<JSONObject>>(emptyList())};var err by remember{mutableStateOf<String?>(null)};LaunchedEffect(endpoint){api.get(endpoint).onSuccess{rows=extract(it,key)}.onFailure{err=it.message}};LazyColumn(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){err?.let{item{Error(it)}};items(rows){JsonCard(title,it)};if(rows.isEmpty()&&err==null)item{Empty()}}}
+
+@Composable
+private fun DriverVerification(api: ApiClient) {
+    val scope = rememberCoroutineScope()
+    var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var selected by remember { mutableStateOf<JSONObject?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var rejectId by remember { mutableStateOf<String?>(null) }
+
+    fun load() {
+        scope.launch {
+            loading = true
+            error = null
+            val endpoints = listOf(
+                "/admin/verification/requests?role=DRIVER&status=UNDER_VERIFICATION&limit=100",
+                "/admin/verification/requests?role=DRIVER&status=RESUBMITTED&limit=100",
+                "/admin/verification/requests?role=DRIVER&status=PENDING&limit=100"
+            )
+            var loaded = false
+            for (endpoint in endpoints) {
+                if (loaded) break
+                api.get(endpoint).onSuccess {
+                    val found = extractVerificationItems(it)
+                    if (found.isNotEmpty()) {
+                        rows = found
+                        loaded = true
+                    }
+                }.onFailure { if (error == null) error = it.message }
+            }
+            loading = false
+        }
+    }
+
+    fun decide(id: String, status: String, reason: String? = null) {
+        scope.launch {
+            busy = true
+            val body = JSONObject().put("status", status)
+            if (status == "REJECTED") body.put("rejectionReason", reason ?: "Rejected by admin")
+            api.patch("/admin/verification/requests/" + id, body)
+                .onSuccess { selected = null; rejectId = null; load() }
+                .onFailure { error = it.message }
+            busy = false
+        }
+    }
+
+    LaunchedEffect(Unit) { load() }
+
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Driver Verification", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text("Review driver documents and live verification.", color = Color.Gray)
+                    }
+                    OutlinedButton(onClick = { load() }, enabled = !loading) {
+                        Text(if (loading) "Loading..." else "Refresh")
+                    }
+                }
+            }
+            error?.let { item { Error(it) } }
+            if (!loading && rows.isEmpty()) {
+                item { Empty() }
+            }
+            items(rows, key = { it.optString("id") }) { row ->
+                val user = row.optJSONObject("user")
+                val name = user?.optString("name").orEmpty().ifBlank { "Driver" }
+                val username = user?.optString("username").orEmpty()
+                val status = row.optString("status", "UNKNOWN")
+                val documents = row.optJSONArray("documents")
+                val live = row.optJSONObject("liveSession")
+                val liveStatus = live?.optString("status").orEmpty().ifBlank { "NOT_STARTED" }
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column(Modifier.weight(1f)) {
+                                Text(name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                if (username.isNotBlank()) Text("@" + username, color = Color.Gray)
+                            }
+                            StatusChip(status)
+                        }
+                        Text("Documents: " + (documents?.length() ?: 0))
+                        Text("Live verification: " + liveStatus)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = {
+                                scope.launch {
+                                    api.get("/admin/verification/requests/" + row.optString("id"))
+                                        .onSuccess { selected = it.optJSONObject("data") ?: it }
+                                        .onFailure { error = it.message }
+                                }
+                            }) { Text("Details") }
+                            OutlinedButton(
+                                onClick = { rejectId = row.optString("id") },
+                                enabled = !busy
+                            ) { Text("Reject") }
+                            Button(
+                                onClick = { decide(row.optString("id"), "VERIFIED") },
+                                enabled = !busy,
+                                colors = ButtonDefaults.buttonColors(containerColor = Yellow, contentColor = Navy)
+                            ) { Text("Approve") }
+                        }
+                    }
+                }
+            }
+        }
+        selected?.let { detail ->
+            VerificationDetailsDialog(
+                request = detail,
+                busy = busy,
+                onDismiss = { selected = null },
+                onReject = { rejectId = detail.optString("id") },
+                onApprove = { decide(detail.optString("id"), "VERIFIED") }
+            )
+        }
+        rejectId?.let { id ->
+            RejectDialog(
+                busy = busy,
+                onDismiss = { rejectId = null },
+                onConfirm = { reason -> decide(id, "REJECTED", reason) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatusChip(status: String) {
+    Surface(
+        color = when (status) {
+            "VERIFIED" -> Color(0xFFDDF7E5)
+            "REJECTED" -> Color(0xFFFFE3E3)
+            else -> Color(0xFFFFF3CD)
+        },
+        shape = MaterialTheme.shapes.small
+    ) {
+        Text(status.replace('_', ' '), Modifier.padding(horizontal = 10.dp, vertical = 6.dp), fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun VerificationDetailsDialog(
+    request: JSONObject,
+    busy: Boolean,
+    onDismiss: () -> Unit,
+    onReject: () -> Unit,
+    onApprove: () -> Unit
+) {
+    val user = request.optJSONObject("user")
+    val docs = request.optJSONArray("documents")
+    val steps = request.optJSONArray("steps")
+    val live = request.optJSONObject("liveSession")
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text(user?.optString("name").orEmpty().ifBlank { "Driver Verification" }) },
+        text = {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                item { Text("Status: " + request.optString("status", "UNKNOWN")) }
+                item { Text("Username: " + user?.optString("username").orEmpty().ifBlank { "—" }) }
+                item { Text("Email: " + user?.optString("email").orEmpty().ifBlank { "—" }) }
+                item { Text("Live verification: " + live?.optString("status").orEmpty().ifBlank { "NOT_STARTED" }) }
+                item { Text("Documents") }
+                if (docs != null) for (i in 0 until docs.length()) {
+                    val d = docs.optJSONObject(i)
+                    item { Text("• " + d?.optString("documentType", "Document") + " — " + d?.optString("verificationStatus", "PENDING")) }
+                }
+                item { Text("Verification steps") }
+                if (steps != null) for (i in 0 until steps.length()) {
+                    val s = steps.optJSONObject(i)
+                    item { Text("• " + s?.optString("step", "STEP") + " — " + s?.optString("status", "PENDING")) }
+                }
+                request.optString("rejectionReason").takeIf { it.isNotBlank() }?.let {
+                    item { Text("Previous rejection: " + it, color = Color(0xFF9A0000)) }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onApprove,
+                enabled = !busy,
+                colors = ButtonDefaults.buttonColors(containerColor = Yellow, contentColor = Navy)
+            ) { Text(if (busy) "Processing..." else "Approve") }
+        },
+        dismissButton = {
+            Row {
+                OutlinedButton(onClick = onReject, enabled = !busy) { Text("Reject") }
+                TextButton(onClick = onDismiss, enabled = !busy) { Text("Close") }
+            }
+        }
+    )
+}
+
+@Composable
+private fun RejectDialog(
+    busy: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var reason by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text("Reject Driver Verification") },
+        text = {
+            OutlinedTextField(
+                value = reason,
+                onValueChange = { reason = it },
+                label = { Text("Rejection reason") },
+                minLines = 3,
+                enabled = !busy,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(reason.trim()) },
+                enabled = reason.trim().isNotBlank() && !busy
+            ) { Text(if (busy) "Processing..." else "Reject") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") }
+        }
+    )
+}
 
 @Composable private fun ActionList(api:ApiClient,title:String,endpoint:String,key:String,vararg actionPairs:Pair<String,suspend(String)->Result<JSONObject>>){var rows by remember{mutableStateOf<List<JSONObject>>(emptyList())};var err by remember{mutableStateOf<String?>(null)};val scope=rememberCoroutineScope();fun load(){scope.launch{api.get(endpoint).onSuccess{rows=extract(it,key)}.onFailure{err=it.message}}};LaunchedEffect(endpoint){load()};LazyColumn(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){err?.let{item{Error(it)}};items(rows){row->val id=row.optString("id");Card(Modifier.fillMaxWidth()){Column(Modifier.padding(14.dp)){Text(pretty(row),fontWeight=FontWeight.Bold);Text(compact(row),maxLines=5,color=Color.DarkGray);if(id.isNotBlank())Row{actionPairs.forEach{a->OutlinedButton(onClick={scope.launch{a.second(id).onFailure{err=it.message}.onSuccess{load()}}},modifier=Modifier.padding(end=6.dp)){Text(a.first)}}}}}}}}
 
