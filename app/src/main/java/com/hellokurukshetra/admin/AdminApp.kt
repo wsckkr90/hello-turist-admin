@@ -58,6 +58,7 @@ private fun DriverVerification(api: ApiClient) {
                     val found = extractVerificationItems(it)
                     if (found.isNotEmpty()) {
                         rows = found
+                        error = null
                         loaded = true
                     }
                 }.onFailure { if (error == null) error = it.message }
@@ -137,7 +138,7 @@ private fun DriverVerification(api: ApiClient) {
                             ) { Text("Reject") }
                             Button(
                                 onClick = { decide(row.optString("id"), "VERIFIED") },
-                                enabled = !busy,
+                                enabled = !busy && (documents?.length() ?: 0) > 0 && liveStatus == "IN_PROGRESS",
                                 colors = ButtonDefaults.buttonColors(containerColor = Yellow, contentColor = Navy)
                             ) { Text("Approve") }
                         }
