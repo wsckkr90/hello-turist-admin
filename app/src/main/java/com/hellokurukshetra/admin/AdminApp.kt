@@ -313,8 +313,6 @@ private fun RejectDialog(
     fun load(){scope.launch{api.get("/admin/notifications?limit=100").onSuccess{rows=extract(it,"notifications");err=null}.onFailure{err=it.message}}};LaunchedEffect(Unit){load()}
     LazyColumn(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){item{Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text("Notifications",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold);Button({send=true}){Text("Send Notification")}}};err?.let{item{Error(it)}};items(rows){JsonCard("Notification",it)}}}
     if(send)AlertDialog(onDismissRequest={send=false},title={Text("Send Notification")},text={Column(verticalArrangement=Arrangement.spacedBy(6.dp)){OutlinedTextField(userId,{userId=it},label={Text("User ID")});OutlinedTextField(title,{title=it},label={Text("Title")});OutlinedTextField(body,{body=it},label={Text("Message")},minLines=3)}},confirmButton={Button({scope.launch{api.post("/admin/notifications",JSONObject().put("userId",userId.trim()).put("title",title.trim()).put("body",body.trim())).onSuccess{send=false;load()}.onFailure{err=it.message}}}){Text("Send")}},dismissButton={TextButton({send=false}){Text("Close")}})}
-}
-
 
 @Composable private fun AdminUsersAdmin(api:ApiClient){
     val scope=rememberCoroutineScope();var rows by remember{mutableStateOf<List<JSONObject>>(emptyList())};var err by remember{mutableStateOf<String?>(null)};var target by remember{mutableStateOf<String?>(null)};var permissions by remember{mutableStateOf("")}
