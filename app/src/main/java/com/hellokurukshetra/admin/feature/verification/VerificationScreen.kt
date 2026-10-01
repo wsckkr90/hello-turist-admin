@@ -11,6 +11,7 @@ import com.hellokurukshetra.admin.ui.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 @Composable
@@ -22,6 +23,7 @@ fun VerificationScreen(api: ApiClient) {
     var decisionId by remember { mutableStateOf<String?>(null) }
     var rejectionReason by remember { mutableStateOf("") }
     var refreshKey by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
 
     suspend fun load() {
         loading = true
@@ -114,7 +116,11 @@ fun VerificationScreen(api: ApiClient) {
                     onClick = {
                         val body = JSONObject().put("status", if (reject) "REJECTED" else "VERIFIED")
                         if (reject) body.put("rejectionReason", rejectionReason.trim())
-                        LaunchedEffectHost.launch(api, "/admin/verification/requests/$id", body) { refreshKey++ }
+                        scope.launch {
+                            api.patch("/admin/verification/requests/$id", body)
+                                .onSuccess { refreshKey++ }
+                                .onFailure { error = it.message ?: "Unable to update verification" }
+                        }
                         decisionId = null
                         rejectionReason = ""
                     }
@@ -143,11 +149,3 @@ fun VerificationScreen(api: ApiClient) {
     }
 }
 
-private object LaunchedEffectHost {
-    @Composable
-    fun launch(api: ApiClient, path: String, body: JSONObject, onDone: () -> Unit) {
-        LaunchedEffect(path, body.toString()) {
-            api.patch(path, body).onSuccess { onDone() }
-        }
-    }
-}
