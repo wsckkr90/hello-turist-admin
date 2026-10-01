@@ -14,15 +14,21 @@ fun SupportScreen(api: ApiClient) {
  var error by remember { mutableStateOf<String?>(null) }
  var target by remember { mutableStateOf<String?>(null) }
  var message by remember { mutableStateOf("") }
+ var submit by remember { mutableStateOf(false) }
  LaunchedEffect(Unit) {
   api.get("/admin/support/tickets?limit=100").onSuccess { rows = extract(it, "items") }.onFailure { error = it.message }
+ }
+ LaunchedEffect(submit) {
+  if (!submit) return@LaunchedEffect
+  val id = target ?: return@LaunchedEffect
+  if (message.isNotBlank()) api.post("/admin/support/tickets/" + id + "/reply", JSONObject().put("message", message.trim())).onFailure { error = it.message }
+  message = ""
+  submit = false
  }
  LaunchedEffect(target) {
   val id = target ?: return@LaunchedEffect
   if (message.isNotBlank()) {
-   api.post("/admin/support/tickets/" + id + "/reply", JSONObject().put("message", message.trim()))
-     .onFailure { error = it.message }
-   message = ""
+   // draft is submitted by the submit state above
   }
  }
  LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -44,7 +50,7 @@ fun SupportScreen(api: ApiClient) {
    onDismissRequest = { target = null },
    title = { Text("Reply to ticket") },
    text = { OutlinedTextField(message, { message = it }, label = { Text("Message") }, minLines = 3) },
-   confirmButton = { Button(onClick = { target = id }) { Text("Send") } },
+   confirmButton = { Button(onClick = { submit = true }) { Text("Send") } },
    dismissButton = { TextButton(onClick = { target = null; message = "" }) { Text("Cancel") } }
   )
  }
