@@ -20,6 +20,7 @@ fun RidesScreen(api: ApiClient) {
     var loading by remember { mutableStateOf(true) }
     var action by remember { mutableStateOf<Pair<String, String>?>(null) }
     var input by remember { mutableStateOf("") }
+    var driverId by remember { mutableStateOf("") }
     var search by remember { mutableStateOf("") }
     var page by rememberSaveable { mutableIntStateOf(1) }
     var totalPages by remember { mutableIntStateOf(1) }
@@ -65,12 +66,12 @@ fun RidesScreen(api: ApiClient) {
                         OutlinedButton(onClick = {
                             scope.launch { api.get("/admin/rides/" + id).onSuccess { selected = dataObject(it) }.onFailure { error = it.message } }
                         }) { Text("Details") }
-                        OutlinedButton(onClick = { action = id to "assign" }) { Text("Assign") }
+                        OutlinedButton(onClick = { action = id to "assign"; driverId = "" }) { Text("Assign") }
                         OutlinedButton(onClick = { action = id to "interrupt" }) { Text("Interrupt") }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         OutlinedButton(onClick = { action = id to "cancel" }) { Text("Cancel") }
-                        OutlinedButton(onClick = { action = id to "recover" }) { Text("Recover") }
+                        OutlinedButton(onClick = { action = id to "recover"; driverId = "" }) { Text("Recover") }
                     }
                 }
             }
@@ -81,23 +82,48 @@ fun RidesScreen(api: ApiClient) {
     action?.let { current ->
         val assign = current.second == "assign"
         AlertDialog(
-            onDismissRequest = { action = null; input = "" },
+            onDismissRequest = { action = null; input = ""; driverId = "" },
             title = { Text(current.second.replaceFirstChar { it.uppercase() } + " ride") },
             text = {
-                OutlinedTextField(
-                    input,
-                    { input = it },
-                    label = { Text(if (assign) "Verified driver ID" else "Reason") },
-                    minLines = if (assign) 1 else 3,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (assign || current.second == "recover") {
+                        AdminPersonPicker(
+                            api = api,
+                            role = "DRIVER",
+                            label = if (assign) "Verified driver" else "Replacement driver (optional)",
+                            selectedId = driverId,
+                            onSelected = { driverId = it },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        if (current.second == "recover") {
+                            Text(
+                                "Leave the driver unselected to let the backend choose an approved available replacement.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        OutlinedTextField(
+                            input,
+                            { input = it },
+                            label = { Text("Reason") },
+                            minLines = 3,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
             },
             confirmButton = {
                 Button(
-                    enabled = !assign || input.isNotBlank(),
+                    enabled = if (assign) driverId.isNotBlank() else true,
                     onClick = {
-                        val body = if (assign) JSONObject().put("driverId", input.trim())
-                        else JSONObject().put("reason", input.trim().ifBlank { "Admin intervention" })
+                        val body = when (current.second) {
+                            "assign" -> JSONObject().put("driverId", driverId)
+                            "recover" -> JSONObject().put("reason", input.trim().ifBlank { "Admin recovery" }).apply {
+                                if (driverId.isNotBlank()) put("driverId", driverId)
+                            }
+                            else -> JSONObject().put("reason", input.trim().ifBlank { "Admin intervention" })
+                        }
                         scope.launch {
                             val result = when (current.second) {
                                 "assign" -> api.post("/admin/rides/" + current.first + "/assign", body)
@@ -112,7 +138,7 @@ fun RidesScreen(api: ApiClient) {
                     }
                 ) { Text("Confirm") }
             },
-            dismissButton = { TextButton(onClick = { action = null; input = "" }) { Text("Close") } }
+            dismissButton = { TextButton(onClick = { action = null; input = ""; driverId = "" }) { Text("Close") } }
         )
     }
 
