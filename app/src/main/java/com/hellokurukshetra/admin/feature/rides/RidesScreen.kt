@@ -1,42 +1,138 @@
 package com.hellokurukshetra.admin.feature.rides
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hellokurukshetra.admin.data.ApiClient
 import com.hellokurukshetra.admin.ui.*
+import kotlinx.coroutines.launch
 import org.json.JSONObject
+
 @Composable
 fun RidesScreen(api: ApiClient) {
- var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
- var error by remember { mutableStateOf<String?>(null) }
- var action by remember { mutableStateOf<Pair<String, String>?>(null) }
- var input by remember { mutableStateOf("") }
- var submit by remember { mutableStateOf(false) }
- LaunchedEffect(Unit) { api.get("/admin/rides?limit=100").onSuccess { rows = extract(it, "items") }.onFailure { error = it.message } }
- LaunchedEffect(submit) {
-  if (!submit) return@LaunchedEffect
-  val current = action ?: return@LaunchedEffect
-  val body = if (current.second == "assign") JSONObject().put("driverId", input.trim()) else JSONObject().put("reason", input.trim().ifBlank { "Admin intervention" })
-  val result = when (current.second) { "assign" -> api.post("/admin/rides/" + current.first + "/assign", body); "cancel" -> api.post("/admin/rides/" + current.first + "/cancel", body); else -> api.post("/admin/rides/" + current.first + "/recover", body) }
-  result.onFailure { error = it.message }
-  submit = false; action = null; input = ""
- }
- LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-  item { PageHeader("Ride operations", "Monitor rides and perform controlled admin interventions.") }
-  error?.let { item { ErrorBanner(it) } }
-  items(rows, key = { it.optString("id") }) { row ->
-   val id = row.optString("id")
-   Card(Modifier.fillMaxWidth()) {
-    Column(Modifier.padding(16.dp)) {
-     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(displayName(row), style = MaterialTheme.typography.titleMedium); StatusBadge(row.optString("status", "UNKNOWN")) }
-     Text(summary(row))
-     Row { OutlinedButton(onClick = { action = id to "assign" }) { Text("Assign") }; Spacer(Modifier.width(6.dp)); OutlinedButton(onClick = { action = id to "cancel" }) { Text("Cancel") }; Spacer(Modifier.width(6.dp)); OutlinedButton(onClick = { action = id to "recover" }) { Text("Recover") } }
+    var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var selected by remember { mutableStateOf<JSONObject?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var action by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var input by remember { mutableStateOf("") }
+    var search by remember { mutableStateOf("") }
+    var page by rememberSaveable { mutableIntStateOf(1) }
+    var totalPages by remember { mutableIntStateOf(1) }
+    var refreshKey by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(page, search, refreshKey) {
+        loading = true
+        error = null
+        val query = "/admin/rides?page=$page&limit=20" +
+            if (search.isBlank()) "" else "&search=" + java.net.URLEncoder.encode(search.trim(), "UTF-8")
+        api.get(query)
+            .onSuccess {
+                rows = extract(it, "items")
+                totalPages = pagination(it).optInt("totalPages", 1).coerceAtLeast(1)
+            }
+            .onFailure { error = it.message ?: "Unable to load rides" }
+        loading = false
     }
-   }
-  }
- }
- if (action != null) AlertDialog(onDismissRequest = { action = null }, title = { Text(action!!.second.replaceFirstChar { it.uppercase() } + " ride") }, text = { OutlinedTextField(input, { input = it }, label = { Text(if (action!!.second == "assign") "Driver ID" else "Reason") }) }, confirmButton = { Button(onClick = { submit = true }) { Text("Confirm") } }, dismissButton = { TextButton(onClick = { action = null }) { Text("Close") } })
+
+    LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item { PageHeader("Ride operations", "Monitor live ride state and perform controlled interventions.", { refreshKey++ }, loading) }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(search, { search = it; page = 1 }, label = { Text("Search ride, pickup, drop-off or rider") }, singleLine = true, modifier = Modifier.weight(1f))
+                OutlinedButton(onClick = { search = ""; page = 1; refreshKey++ }) { Text("Clear") }
+            }
+        }
+        error?.let { item { ErrorBanner(it) { refreshKey++ } } }
+        if (loading && rows.isEmpty()) item { LoadingState("Loading rides…") }
+        if (!loading && rows.isEmpty() && error == null) item { EmptyState("No rides match the current search.") }
+
+        items(rows, key = { it.optString("id") }) { row ->
+            val id = row.optString("id")
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(displayName(row), style = MaterialTheme.typography.titleMedium)
+                        StatusBadge(row.optString("status", "UNKNOWN"))
+                    }
+                    Text(summary(row), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(onClick = {
+                            scope.launch { api.get("/admin/rides/" + id).onSuccess { selected = dataObject(it) }.onFailure { error = it.message } }
+                        }) { Text("Details") }
+                        OutlinedButton(onClick = { action = id to "assign" }) { Text("Assign") }
+                        OutlinedButton(onClick = { action = id to "interrupt" }) { Text("Interrupt") }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(onClick = { action = id to "cancel" }) { Text("Cancel") }
+                        OutlinedButton(onClick = { action = id to "recover" }) { Text("Recover") }
+                    }
+                }
+            }
+        }
+        item { PaginationBar(page, totalPages, { if (page > 1) page-- }, { if (page < totalPages) page++ }) }
+    }
+
+    action?.let { current ->
+        val assign = current.second == "assign"
+        AlertDialog(
+            onDismissRequest = { action = null; input = "" },
+            title = { Text(current.second.replaceFirstChar { it.uppercase() } + " ride") },
+            text = {
+                OutlinedTextField(
+                    input,
+                    { input = it },
+                    label = { Text(if (assign) "Verified driver ID" else "Reason") },
+                    minLines = if (assign) 1 else 3,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    enabled = !assign || input.isNotBlank(),
+                    onClick = {
+                        val body = if (assign) JSONObject().put("driverId", input.trim())
+                        else JSONObject().put("reason", input.trim().ifBlank { "Admin intervention" })
+                        scope.launch {
+                            val result = when (current.second) {
+                                "assign" -> api.post("/admin/rides/" + current.first + "/assign", body)
+                                "cancel" -> api.post("/admin/rides/" + current.first + "/cancel", body)
+                                "interrupt" -> api.post("/admin/rides/" + current.first + "/interrupt", body)
+                                else -> api.post("/admin/rides/" + current.first + "/recover", body)
+                            }
+                            result.onSuccess { refreshKey++ }.onFailure { error = it.message ?: "Ride action failed" }
+                        }
+                        action = null
+                        input = ""
+                    }
+                ) { Text("Confirm") }
+            },
+            dismissButton = { TextButton(onClick = { action = null; input = "" }) { Text("Close") } }
+        )
+    }
+
+    selected?.let { row ->
+        AlertDialog(
+            onDismissRequest = { selected = null },
+            title = { Text("Ride details") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text("Rider: " + row.optJSONObject("rider")?.optString("name", "—"))
+                    Text("Status: " + row.optString("status", "—"))
+                    Text("Pickup: " + row.optString("pickupAddress", "—"))
+                    Text("Drop-off: " + row.optString("dropoffAddress", "—"))
+                    Text("Created: " + row.optString("createdAt", "—"))
+                    Text("Updated: " + row.optString("updatedAt", "—"))
+                    Text("Assignments: " + (row.optJSONArray("assignments")?.length() ?: 0))
+                    Text("Events: " + (row.optJSONArray("events")?.length() ?: 0))
+                }
+            },
+            confirmButton = { TextButton(onClick = { selected = null }) { Text("Close") } }
+        )
+    }
 }
