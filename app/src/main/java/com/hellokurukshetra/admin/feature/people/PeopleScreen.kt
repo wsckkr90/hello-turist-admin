@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hellokurukshetra.admin.data.ApiClient
@@ -21,6 +23,7 @@ fun PeopleScreen(api: ApiClient) {
     var page by rememberSaveable { mutableIntStateOf(1) }
     var totalPages by remember { mutableIntStateOf(1) }
     var refreshKey by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(page, role, search, refreshKey) {
         loading = true
@@ -73,7 +76,7 @@ fun PeopleScreen(api: ApiClient) {
                     if (roles.isNotEmpty()) Text(roles.joinToString(" • "), style = MaterialTheme.typography.labelMedium)
                     TextButton(onClick = {
                         val id = row.optString("id")
-                        api.get("/admin/people/$id").onSuccess { selected = dataObject(it) }.onFailure { error = it.message }
+                        scope.launch { api.get("/admin/people/" + id).onSuccess { selected = dataObject(it) }.onFailure { error = it.message } }
                     }) { Text("View details") }
                 }
             }
