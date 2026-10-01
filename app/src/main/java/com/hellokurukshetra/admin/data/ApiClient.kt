@@ -12,6 +12,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
 import java.security.SecureRandom
 import java.util.UUID
 import javax.crypto.Cipher
@@ -150,7 +152,16 @@ private class SessionStore(private val prefs: android.content.SharedPreferences)
     private fun key(): SecretKey {
         (keyStore.getKey(alias, null) as? SecretKey)?.let { return it }
         val generator = KeyGenerator.getInstance("AES", "AndroidKeyStore")
-        generator.init(256)
+        generator.init(
+            KeyGenParameterSpec.Builder(
+                alias,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256)
+                .build(),
+        )
         return generator.generateKey().also {
             // AndroidKeyStore persists the generated key under the alias.
         }
