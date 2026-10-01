@@ -4,12 +4,14 @@ import android.content.Context
 import android.util.Base64
 import com.hellokurukshetra.admin.BuildConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import java.net.UnknownHostException
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import android.security.keystore.KeyGenParameterSpec
@@ -57,51 +59,69 @@ class ApiClient(context: Context) {
         auth: Boolean,
         retry: Boolean = true
     ): Result<JSONObject> = withContext(Dispatchers.IO) {
-        try {
-            val builder = Request.Builder()
-                .url(baseUrl + path.trimStart('/'))
-                .header("Accept", "application/json")
-                .header("Content-Type", "application/json")
+        var dnsAttempt = 0
 
-            sessionStore.get("access_token")
-                ?.takeIf { auth && it.isNotBlank() }
-                ?.let { builder.header("Authorization", "Bearer $it") }
+        while (true) {
+            try {
+                val builder = Request.Builder()
+                    .url(baseUrl + path.trimStart('/'))
+                    .header("Accept", "application/json")
+                    .header("Content-Type", "application/json")
 
-            if (auth && method != "GET") {
-                builder.header("Idempotency-Key", UUID.randomUUID().toString())
-            }
+                sessionStore.get("access_token")
+                    ?.takeIf { auth && it.isNotBlank() }
+                    ?.let { builder.header("Authorization", "Bearer $it") }
 
-            val requestBody = body?.toString()?.toRequestBody("application/json".toMediaType())
-            when (method) {
-                "POST" -> builder.post(requestBody ?: ByteArray(0).toRequestBody(null))
-                "PATCH" -> builder.patch(requestBody ?: ByteArray(0).toRequestBody(null))
-                "PUT" -> builder.put(requestBody ?: ByteArray(0).toRequestBody(null))
-                else -> builder.get()
-            }
+                if (auth && method != "GET") {
+                    builder.header("Idempotency-Key", UUID.randomUUID().toString())
+                }
 
-            client.newCall(builder.build()).execute().use { response ->
-                val raw = response.body?.string().orEmpty()
-                val json = runCatching { JSONObject(if (raw.isBlank()) "{}" else raw) }.getOrElse { JSONObject().put("raw", raw) }
+                val requestBody = body?.toString()?.toRequestBody("application/json".toMediaType())
+                when (method) {
+                    "POST" -> builder.post(requestBody ?: ByteArray(0).toRequestBody(null))
+                    "PATCH" -> builder.patch(requestBody ?: ByteArray(0).toRequestBody(null))
+                    "PUT" -> builder.put(requestBody ?: ByteArray(0).toRequestBody(null))
+                    else -> builder.get()
+                }
 
-                if (response.code == 401 && auth && retry) {
-                    val refreshToken = sessionStore.get("refresh_token")
-                    if (!refreshToken.isNullOrBlank() && refresh(refreshToken)) {
-                        return@withContext request(path, method, body, auth, false)
+                client.newCall(builder.build()).execute().use { response ->
+                    val raw = response.body?.string().orEmpty()
+                    val json = runCatching {
+                        JSONObject(if (raw.isBlank()) "{}" else raw)
+                    }.getOrElse {
+                        JSONObject().put("raw", raw)
                     }
-                    logout()
-                }
 
-                if (!response.isSuccessful) {
-                    val msg = json.optJSONObject("error")?.optString("message")?.takeIf { it.isNotBlank() }
-                        ?: json.optString("message").takeIf { it.isNotBlank() }
-                        ?: "Request failed (" + response.code + ")"
-                    return@withContext Result.failure(IllegalStateException(msg))
-                }
+                    if (response.code == 401 && auth && retry) {
+                        val refreshToken = sessionStore.get("refresh_token")
+                        if (!refreshToken.isNullOrBlank() && refresh(refreshToken)) {
+                            return@withContext request(path, method, body, auth, false)
+                        }
+                        logout()
+                    }
 
-                Result.success(json)
+                    if (!response.isSuccessful) {
+                        val msg = json.optJSONObject("error")?.optString("message")?.takeIf { it.isNotBlank() }
+                            ?: json.optString("message").takeIf { it.isNotBlank() }
+                            ?: "Request failed (" + response.code + ")"
+                        return@withContext Result.failure(IllegalStateException(msg))
+                    }
+
+                    return@withContext Result.success(json)
+                }
+            } catch (e: UnknownHostException) {
+                // Mobile DNS can briefly fail even when the same host is reachable
+                // from the browser. Retry before surfacing the error to the admin.
+                if (dnsAttempt >= 2) {
+                    return@withContext Result.failure(
+                        IllegalStateException("Cannot connect to the backend. Please check your internet connection and try again.", e)
+                    )
+                }
+                dnsAttempt++
+                delay(700L * dnsAttempt)
+            } catch (e: Exception) {
+                return@withContext Result.failure(e)
             }
-        } catch (e: Exception) {
-            Result.failure(e)
         }
     }
 
