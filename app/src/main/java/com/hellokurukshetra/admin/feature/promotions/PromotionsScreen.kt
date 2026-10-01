@@ -17,11 +17,18 @@ fun PromotionsScreen(api: ApiClient) {
  var title by remember { mutableStateOf("") }
  var value by remember { mutableStateOf("10") }
  var action by remember { mutableStateOf<String?>(null) }
+ var submit by remember { mutableStateOf(false) }
  LaunchedEffect(Unit) { api.get("/admin/promotions?limit=100").onSuccess { rows = extract(it, "items") }.onFailure { error = it.message } }
  LaunchedEffect(action) {
   val id = action ?: return@LaunchedEffect
   api.post("/admin/promotions/" + id + "/deactivate").onFailure { error = it.message }
   action = null
+ }
+ LaunchedEffect(submit) {
+  if (!submit) return@LaunchedEffect
+  if (code.isNotBlank() && title.isNotBlank()) api.post("/admin/promotions", JSONObject().put("code", code.trim().uppercase()).put("title", title.trim()).put("discountType", "PERCENTAGE").put("discountValue", value.toDoubleOrNull() ?: 0).put("isActive", true)).onFailure { error = it.message }
+  submit = false
+  create = false
  }
  LaunchedEffect(create) {
   if (create && code.isNotBlank() && title.isNotBlank()) {
@@ -37,5 +44,5 @@ fun PromotionsScreen(api: ApiClient) {
  }
  if (create) AlertDialog(onDismissRequest = { create = false }, title = { Text("Create promotion") },
   text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(code, { code = it }, label = { Text("Code") }); OutlinedTextField(title, { title = it }, label = { Text("Title") }); OutlinedTextField(value, { value = it }, label = { Text("Discount %") }) } },
-  confirmButton = { Button(onClick = { create = true }) { Text("Save") } }, dismissButton = { TextButton(onClick = { create = false }) { Text("Cancel") } })
+  confirmButton = { Button(onClick = { submit = true }) { Text("Save") } }, dismissButton = { TextButton(onClick = { create = false }) { Text("Cancel") } })
 }
