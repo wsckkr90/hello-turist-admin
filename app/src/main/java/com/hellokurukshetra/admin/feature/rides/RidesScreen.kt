@@ -14,7 +14,16 @@ fun RidesScreen(api: ApiClient) {
  var error by remember { mutableStateOf<String?>(null) }
  var action by remember { mutableStateOf<Pair<String, String>?>(null) }
  var input by remember { mutableStateOf("") }
+ var submit by remember { mutableStateOf(false) }
  LaunchedEffect(Unit) { api.get("/admin/rides?limit=100").onSuccess { rows = extract(it, "items") }.onFailure { error = it.message } }
+ LaunchedEffect(submit) {
+  if (!submit) return@LaunchedEffect
+  val current = action ?: return@LaunchedEffect
+  val body = if (current.second == "assign") JSONObject().put("driverId", input.trim()) else JSONObject().put("reason", input.trim().ifBlank { "Admin intervention" })
+  val result = when (current.second) { "assign" -> api.post("/admin/rides/" + current.first + "/assign", body); "cancel" -> api.post("/admin/rides/" + current.first + "/cancel", body); else -> api.post("/admin/rides/" + current.first + "/recover", body) }
+  result.onFailure { error = it.message }
+  submit = false; action = null; input = ""
+ }
  LaunchedEffect(action) {
   val current = action ?: return@LaunchedEffect
   val body = if (current.second == "assign") JSONObject().put("driverId", input.trim()) else JSONObject().put("reason", input.trim().ifBlank { "Admin intervention" })
@@ -36,5 +45,5 @@ fun RidesScreen(api: ApiClient) {
    }
   }
  }
- if (action != null) AlertDialog(onDismissRequest = { action = null }, title = { Text(action!!.second.replaceFirstChar { it.uppercase() } + " ride") }, text = { OutlinedTextField(input, { input = it }, label = { Text(if (action!!.second == "assign") "Driver ID" else "Reason") }) }, confirmButton = { Button(onClick = { }) { Text("Confirm") } }, dismissButton = { TextButton(onClick = { action = null }) { Text("Close") } })
+ if (action != null) AlertDialog(onDismissRequest = { action = null }, title = { Text(action!!.second.replaceFirstChar { it.uppercase() } + " ride") }, text = { OutlinedTextField(input, { input = it }, label = { Text(if (action!!.second == "assign") "Driver ID" else "Reason") }) }, confirmButton = { Button(onClick = { submit = true }) { Text("Confirm") } }, dismissButton = { TextButton(onClick = { action = null }) { Text("Close") } })
 }
