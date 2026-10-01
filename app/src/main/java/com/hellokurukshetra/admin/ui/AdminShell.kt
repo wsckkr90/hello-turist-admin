@@ -44,9 +44,13 @@ enum class AdminSection(val title: String, val icon: androidx.compose.ui.graphic
 fun AdminShell(api: ApiClient, onLogout: () -> Unit) {
     var section by rememberSaveable { mutableStateOf(AdminSection.DASHBOARD) }
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    LaunchedEffect(drawerOpen) {
+        if (drawerOpen) drawerState.open() else drawerState.close()
+    }
 
     ModalNavigationDrawer(
-        drawerState = rememberDrawerState(if (drawerOpen) DrawerValue.Open else DrawerValue.Closed),
+        drawerState = drawerState,
         gesturesEnabled = true,
         drawerContent = {
             ModalDrawerSheet(
