@@ -49,9 +49,7 @@ fun EmergencyScreen(api: ApiClient) {
                     Text("Ride: " + row.optString("rideId", "—"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         OutlinedButton(onClick = {
-                            api.get("/admin/emergency/incidents/" + id)
-                                .onSuccess { selected = dataObject(it) }
-                                .onFailure { error = it.message }
+                            scope.launch { api.get("/admin/emergency/incidents/" + id).onSuccess { selected = dataObject(it) }.onFailure { error = it.message } }
                         }) { Text("Details") }
                         TextButton(onClick = { action = id to "acknowledge" }) { Text("Acknowledge") }
                         TextButton(onClick = { action = id to "escalate" }) { Text("Escalate") }
