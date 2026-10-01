@@ -27,11 +27,19 @@ class ApiClient(context: Context) {
     private val client = OkHttpClient()
     private val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/') + "/"
     private val sessionStore = SessionStore(prefs)
+    @Volatile private var loggedIn = false
 
-    fun isLoggedIn() = !sessionStore.get("access_token").isNullOrBlank()
+    init {
+        // ApiClient is constructed from MainActivity on Dispatchers.IO.
+        // Keep this Keystore-backed check out of the Compose/UI thread.
+        loggedIn = !sessionStore.get("access_token").isNullOrBlank()
+    }
+
+    fun isLoggedIn() = loggedIn
 
     fun logout() {
         prefs.edit().clear().apply()
+        loggedIn = false
     }
 
     suspend fun login(identifier: String, password: String) =
@@ -129,7 +137,10 @@ class ApiClient(context: Context) {
     fun saveSession(data: JSONObject) {
         val access = data.optString("accessToken")
         val refresh = data.optString("refreshToken")
-        if (access.isNotBlank()) sessionStore.put("access_token", access)
+        if (access.isNotBlank()) {
+            sessionStore.put("access_token", access)
+            loggedIn = true
+        }
         if (refresh.isNotBlank()) sessionStore.put("refresh_token", refresh)
     }
 }
