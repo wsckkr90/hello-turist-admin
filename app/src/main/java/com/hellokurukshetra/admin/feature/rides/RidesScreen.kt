@@ -24,13 +24,6 @@ fun RidesScreen(api: ApiClient) {
   result.onFailure { error = it.message }
   submit = false; action = null; input = ""
  }
- LaunchedEffect(action) {
-  val current = action ?: return@LaunchedEffect
-  val body = if (current.second == "assign") JSONObject().put("driverId", input.trim()) else JSONObject().put("reason", input.trim().ifBlank { "Admin intervention" })
-  val result = when (current.second) { "assign" -> api.post("/admin/rides/" + current.first + "/assign", body); "cancel" -> api.post("/admin/rides/" + current.first + "/cancel", body); else -> api.post("/admin/rides/" + current.first + "/recover", body) }
-  result.onFailure { error = it.message }
-  action = null; input = ""
- }
  LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
   item { PageHeader("Ride operations", "Monitor rides and perform controlled admin interventions.") }
   error?.let { item { ErrorBanner(it) } }
