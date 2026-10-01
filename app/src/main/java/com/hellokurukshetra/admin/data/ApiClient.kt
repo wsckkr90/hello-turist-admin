@@ -4,12 +4,14 @@ import android.content.Context
 import android.util.Base64
 import com.hellokurukshetra.admin.BuildConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import java.net.UnknownHostException
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import android.security.keystore.KeyGenParameterSpec
@@ -27,11 +29,19 @@ class ApiClient(context: Context) {
     private val client = OkHttpClient()
     private val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/') + "/"
     private val sessionStore = SessionStore(prefs)
+    @Volatile private var loggedIn = false
 
-    fun isLoggedIn() = !sessionStore.get("access_token").isNullOrBlank()
+    init {
+        // ApiClient is constructed from MainActivity on Dispatchers.IO.
+        // Keep this Keystore-backed check out of the Compose/UI thread.
+        loggedIn = !sessionStore.get("access_token").isNullOrBlank()
+    }
+
+    fun isLoggedIn() = loggedIn
 
     fun logout() {
         prefs.edit().clear().apply()
+        loggedIn = false
     }
 
     suspend fun login(identifier: String, password: String) =
@@ -49,52 +59,81 @@ class ApiClient(context: Context) {
         auth: Boolean,
         retry: Boolean = true
     ): Result<JSONObject> = withContext(Dispatchers.IO) {
-        try {
-            val builder = Request.Builder()
-                .url(baseUrl + path.trimStart('/'))
-                .header("Accept", "application/json")
-                .header("Content-Type", "application/json")
+        var dnsAttempt = 0
+        var result: Result<JSONObject>? = null
 
-            sessionStore.get("access_token")
-                ?.takeIf { auth && it.isNotBlank() }
-                ?.let { builder.header("Authorization", "Bearer $it") }
+        while (result == null) {
+            try {
+                val builder = Request.Builder()
+                    .url(baseUrl + path.trimStart('/'))
+                    .header("Accept", "application/json")
+                    .header("Content-Type", "application/json")
 
-            if (auth && method != "GET") {
-                builder.header("Idempotency-Key", UUID.randomUUID().toString())
-            }
+                sessionStore.get("access_token")
+                    ?.takeIf { auth && it.isNotBlank() }
+                    ?.let { builder.header("Authorization", "Bearer $it") }
 
-            val requestBody = body?.toString()?.toRequestBody("application/json".toMediaType())
-            when (method) {
-                "POST" -> builder.post(requestBody ?: ByteArray(0).toRequestBody(null))
-                "PATCH" -> builder.patch(requestBody ?: ByteArray(0).toRequestBody(null))
-                "PUT" -> builder.put(requestBody ?: ByteArray(0).toRequestBody(null))
-                else -> builder.get()
-            }
+                if (auth && method != "GET") {
+                    builder.header("Idempotency-Key", UUID.randomUUID().toString())
+                }
 
-            client.newCall(builder.build()).execute().use { response ->
-                val raw = response.body?.string().orEmpty()
-                val json = runCatching { JSONObject(if (raw.isBlank()) "{}" else raw) }.getOrElse { JSONObject().put("raw", raw) }
+                val requestBody = body?.toString()?.toRequestBody("application/json".toMediaType())
+                when (method) {
+                    "POST" -> builder.post(requestBody ?: ByteArray(0).toRequestBody(null))
+                    "PATCH" -> builder.patch(requestBody ?: ByteArray(0).toRequestBody(null))
+                    "PUT" -> builder.put(requestBody ?: ByteArray(0).toRequestBody(null))
+                    else -> builder.get()
+                }
 
-                if (response.code == 401 && auth && retry) {
-                    val refreshToken = sessionStore.get("refresh_token")
-                    if (!refreshToken.isNullOrBlank() && refresh(refreshToken)) {
-                        return@withContext request(path, method, body, auth, false)
+                val response = client.newCall(builder.build()).execute()
+                try {
+                    val raw = response.body?.string().orEmpty()
+                    val json = runCatching {
+                        JSONObject(if (raw.isBlank()) "{}" else raw)
+                    }.getOrElse {
+                        JSONObject().put("raw", raw)
                     }
-                    logout()
-                }
 
-                if (!response.isSuccessful) {
-                    val msg = json.optJSONObject("error")?.optString("message")?.takeIf { it.isNotBlank() }
-                        ?: json.optString("message").takeIf { it.isNotBlank() }
-                        ?: "Request failed (" + response.code + ")"
-                    return@withContext Result.failure(IllegalStateException(msg))
-                }
+                    if (response.code == 401 && auth && retry) {
+                        val refreshToken = sessionStore.get("refresh_token")
+                        if (!refreshToken.isNullOrBlank() && refresh(refreshToken)) {
+                            result = request(path, method, body, auth, false)
+                        } else {
+                            logout()
+                        }
+                    }
 
-                Result.success(json)
+                    if (result == null && !response.isSuccessful) {
+                        val msg = json.optJSONObject("error")?.optString("message")?.takeIf { it.isNotBlank() }
+                            ?: json.optString("message").takeIf { it.isNotBlank() }
+                            ?: "Request failed (" + response.code + ")"
+                        result = Result.failure(IllegalStateException(msg))
+                    }
+
+                    if (result == null && response.isSuccessful) {
+                        result = Result.success(json)
+                    }
+                } finally {
+                    response.close()
+                }
+            } catch (e: UnknownHostException) {
+                if (dnsAttempt >= 2) {
+                    result = Result.failure(
+                        IllegalStateException(
+                            "Cannot connect to the backend. Please check your internet connection and try again.",
+                            e
+                        )
+                    )
+                } else {
+                    dnsAttempt++
+                    delay(700L * dnsAttempt)
+                }
+            } catch (e: Exception) {
+                result = Result.failure(e)
             }
-        } catch (e: Exception) {
-            Result.failure(e)
         }
+
+        result ?: Result.failure(IllegalStateException("Request did not produce a result"))
     }
 
     @Synchronized
@@ -129,7 +168,10 @@ class ApiClient(context: Context) {
     fun saveSession(data: JSONObject) {
         val access = data.optString("accessToken")
         val refresh = data.optString("refreshToken")
-        if (access.isNotBlank()) sessionStore.put("access_token", access)
+        if (access.isNotBlank()) {
+            sessionStore.put("access_token", access)
+            loggedIn = true
+        }
         if (refresh.isNotBlank()) sessionStore.put("refresh_token", refresh)
     }
 }
