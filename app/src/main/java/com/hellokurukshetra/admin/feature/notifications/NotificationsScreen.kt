@@ -16,8 +16,14 @@ fun NotificationsScreen(api: ApiClient) {
  var user by remember { mutableStateOf("") }
  var title by remember { mutableStateOf("") }
  var body by remember { mutableStateOf("") }
+ var submit by remember { mutableStateOf(false) }
  LaunchedEffect(Unit) {
   api.get("/admin/notifications?limit=100").onSuccess { rows = extract(it, "notifications") }.onFailure { error = it.message }
+ }
+ LaunchedEffect(submit) {
+  if (!submit) return@LaunchedEffect
+  if (user.isNotBlank() && title.isNotBlank() && body.isNotBlank()) api.post("/admin/notifications", JSONObject().put("userId", user.trim()).put("title", title.trim()).put("body", body.trim())).onFailure { error = it.message }
+  submit = false
  }
  LaunchedEffect(send) {
   if (send && user.isNotBlank() && title.isNotBlank() && body.isNotBlank()) {
@@ -34,7 +40,7 @@ fun NotificationsScreen(api: ApiClient) {
  if (send) {
   AlertDialog(onDismissRequest = { send = false }, title = { Text("Send notification") },
    text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(user, { user = it }, label = { Text("User ID") }); OutlinedTextField(title, { title = it }, label = { Text("Title") }); OutlinedTextField(body, { body = it }, label = { Text("Message") }, minLines = 3) } },
-   confirmButton = { Button(onClick = { if (user.isNotBlank() && title.isNotBlank() && body.isNotBlank()) send = true }) { Text("Send") } },
+   confirmButton = { Button(onClick = { submit = true }) { Text("Send") } },
    dismissButton = { TextButton(onClick = { send = false }) { Text("Cancel") } })
  }
 }
