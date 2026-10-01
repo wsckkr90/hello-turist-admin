@@ -2,10 +2,12 @@ package com.hellokurukshetra.admin.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
-
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+val AdminPrimary = Color(0xFF0B2742)
+val AdminPrimaryDark = Color(0xFF06192A)
+val AdminGoldTheme = Color(0xFFFFC107)
+val AdminBackground = Color(0xFFF6F8FB)
+val AdminSurfaceTheme = Color.White
+val AdminText = Color(0xFF102238)
+val AdminMuted = Color(0xFF65748B)
+val AdminSuccessTheme = Color(0xFF16834A)
+val AdminDangerTheme = Color(0xFFC62828)
