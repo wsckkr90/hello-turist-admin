@@ -24,13 +24,7 @@ fun NotificationsScreen(api: ApiClient) {
   if (!submit) return@LaunchedEffect
   if (user.isNotBlank() && title.isNotBlank() && body.isNotBlank()) api.post("/admin/notifications", JSONObject().put("userId", user.trim()).put("title", title.trim()).put("body", body.trim())).onFailure { error = it.message }
   submit = false
- }
- LaunchedEffect(send) {
-  if (send && user.isNotBlank() && title.isNotBlank() && body.isNotBlank()) {
-   api.post("/admin/notifications", JSONObject().put("userId", user.trim()).put("title", title.trim()).put("body", body.trim()))
-     .onFailure { error = it.message }
-   send = false
-  }
+  send = false
  }
  LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
   item { PageHeader("Notifications", "Review notification history and send a direct message."); Button(onClick = { send = true }) { Text("Send notification") } }
