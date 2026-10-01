@@ -13,6 +13,7 @@ fun PaymentsScreen(api: ApiClient) {
  var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
  var error by remember { mutableStateOf<String?>(null) }
  var refundId by remember { mutableStateOf<String?>(null) }
+ var confirmRefundId by remember { mutableStateOf<String?>(null) }
  LaunchedEffect(Unit) {
   api.get("/admin/finance/payments?limit=100").onSuccess { rows = extract(it, "items") }.onFailure { error = it.message }
  }
@@ -33,7 +34,7 @@ fun PaymentsScreen(api: ApiClient) {
       StatusBadge(row.optString("status", "UNKNOWN"))
      }
      Text(summary(row))
-     TextButton(onClick = { refundId = row.optString("id") }) { Text("Request refund") }
+     TextButton(onClick = { confirmRefundId = row.optString("id") }) { Text("Request refund") }
     }
    }
   }
