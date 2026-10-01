@@ -79,9 +79,7 @@ fun VerificationScreen(api: ApiClient) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = {
                             val id = row.optString("id")
-                            api.get("/admin/verification/requests/$id")
-                                .onSuccess { selected = dataObject(it) }
-                                .onFailure { error = it.message }
+                            scope.launch { api.get("/admin/verification/requests/" + id).onSuccess { selected = dataObject(it) }.onFailure { error = it.message } }
                         }) { Text("Review") }
                         Button(onClick = { decisionId = row.optString("id") }) { Text("Approve") }
                         OutlinedButton(onClick = { decisionId = "REJECT:" + row.optString("id") }) { Text("Reject") }
