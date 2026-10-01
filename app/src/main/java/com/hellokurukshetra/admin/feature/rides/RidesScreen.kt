@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hellokurukshetra.admin.data.ApiClient
@@ -62,7 +63,7 @@ fun RidesScreen(api: ApiClient) {
                     Text(summary(row), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         OutlinedButton(onClick = {
-                            api.get("/admin/rides/" + id).onSuccess { selected = dataObject(it) }.onFailure { error = it.message }
+                            scope.launch { api.get("/admin/rides/" + id).onSuccess { selected = dataObject(it) }.onFailure { error = it.message } }
                         }) { Text("Details") }
                         OutlinedButton(onClick = { action = id to "assign" }) { Text("Assign") }
                         OutlinedButton(onClick = { action = id to "interrupt" }) { Text("Interrupt") }
