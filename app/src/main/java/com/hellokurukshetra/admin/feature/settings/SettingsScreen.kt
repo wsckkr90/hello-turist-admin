@@ -1,0 +1,133 @@
+package com.hellokurukshetra.admin.feature.settings
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.hellokurukshetra.admin.data.ApiClient
+import com.hellokurukshetra.admin.ui.*
+import kotlinx.coroutines.launch
+import org.json.JSONObject
+
+@Composable
+fun SettingsScreen(api: ApiClient) {
+    var appName by remember { mutableStateOf("") }
+    var logo by remember { mutableStateOf("") }
+    var icon by remember { mutableStateOf("") }
+    var base by remember { mutableStateOf("") }
+    var perKm by remember { mutableStateOf("") }
+    var minimum by remember { mutableStateOf("") }
+    var bannerTitle by remember { mutableStateOf("") }
+    var bannerSubtitle by remember { mutableStateOf("") }
+    var bannerImage by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        api.get("/admin/branding").onSuccess {
+            val d = dataObject(it)
+            appName = d.optString("appName")
+            logo = d.optString("logoUrl")
+            icon = d.optString("iconUrl")
+        }
+        api.get("/admin/pricing/ride").onSuccess {
+            val d = dataObject(it)
+            base = d.optString("baseFare")
+            perKm = d.optString("perKm")
+            minimum = d.optString("minimumFare")
+        }
+        api.get("/admin/home-banner").onSuccess {
+            val d = dataObject(it)
+            bannerTitle = d.optString("title")
+            bannerSubtitle = d.optString("subtitle")
+            bannerImage = d.optString("imageUrl")
+        }.onFailure { error = it.message }
+    }
+
+    LazyColumn(
+        Modifier.fillMaxSize().padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item { PageHeader("Branding & pricing", "Update app identity, home content and ride pricing.") }
+        error?.let { item { ErrorBanner(it) } }
+
+        item {
+            Card {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("App branding", style = MaterialTheme.typography.titleLarge)
+                    OutlinedTextField(appName, { appName = it }, label = { Text("App name") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(logo, { logo = it }, label = { Text("Logo HTTPS URL") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(icon, { icon = it }, label = { Text("Icon HTTPS URL") }, modifier = Modifier.fillMaxWidth())
+                    Button(
+                        enabled = !saving,
+                        onClick = {
+                            scope.launch {
+                                saving = true
+                                api.patch(
+                                    "/admin/branding",
+                                    JSONObject()
+                                        .put("appName", appName.trim())
+                                        .put("logoUrl", logo.trim().ifBlank { JSONObject.NULL })
+                                        .put("iconUrl", icon.trim().ifBlank { JSONObject.NULL })
+                                ).onFailure { error = it.message }
+                                saving = false
+                            }
+                        }
+                    ) { Text("Save branding") }
+                }
+            }
+        }
+
+        item {
+            Card {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Home banner", style = MaterialTheme.typography.titleLarge)
+                    OutlinedTextField(bannerTitle, { bannerTitle = it }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(bannerSubtitle, { bannerSubtitle = it }, label = { Text("Subtitle") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(bannerImage, { bannerImage = it }, label = { Text("Image HTTPS URL") }, modifier = Modifier.fillMaxWidth())
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                api.patch(
+                                    "/admin/home-banner",
+                                    JSONObject()
+                                        .put("title", bannerTitle.trim())
+                                        .put("subtitle", bannerSubtitle.trim())
+                                        .put("imageUrl", bannerImage.trim().ifBlank { JSONObject.NULL })
+                                        .put("isActive", true)
+                                ).onFailure { error = it.message }
+                            }
+                        }
+                    ) { Text("Save banner") }
+                }
+            }
+        }
+
+        item {
+            Card {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Ride pricing (INR)", style = MaterialTheme.typography.titleLarge)
+                    OutlinedTextField(base, { base = it }, label = { Text("Base fare") })
+                    OutlinedTextField(perKm, { perKm = it }, label = { Text("Per KM") })
+                    OutlinedTextField(minimum, { minimum = it }, label = { Text("Minimum fare") })
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                api.patch(
+                                    "/admin/pricing/ride",
+                                    JSONObject()
+                                        .put("baseFare", base.toDoubleOrNull() ?: 0)
+                                        .put("perKm", perKm.toDoubleOrNull() ?: 0)
+                                        .put("minimumFare", minimum.toDoubleOrNull() ?: 0)
+                                ).onFailure { error = it.message }
+                            }
+                        }
+                    ) { Text("Save pricing") }
+                }
+            }
+        }
+    }
+}
