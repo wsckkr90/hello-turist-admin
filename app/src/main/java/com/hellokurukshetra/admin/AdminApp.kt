@@ -56,18 +56,19 @@ private fun DriverVerification(api: ApiClient) {
             ).map { (role, status) ->
                 "/admin/verification/requests?role=$role&status=$status&limit=100"
             }
-            var loaded = false
+            val aggregate = mutableListOf<JSONObject>()
+            var failures = 0
             for (endpoint in endpoints) {
-                if (loaded) break
                 api.get(endpoint).onSuccess {
-                    val found = extractVerificationItems(it)
-                    if (found.isNotEmpty()) {
-                        rows = found
-                        error = null
-                        loaded = true
-                    }
-                }.onFailure { if (error == null) error = it.message }
+                    aggregate += extractVerificationItems(it)
+                }.onFailure {
+                    failures++
+                    if (error == null) error = it.message
+                }
             }
+            rows = aggregate.distinctBy { it.optString("id") }
+            if (rows.isNotEmpty()) error = null
+            else if (failures == endpoints.size) error = "Unable to load verification requests."
             loading = false
         }
     }
