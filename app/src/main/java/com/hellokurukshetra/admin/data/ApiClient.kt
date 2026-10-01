@@ -60,8 +60,9 @@ class ApiClient(context: Context) {
         retry: Boolean = true
     ): Result<JSONObject> = withContext(Dispatchers.IO) {
         var dnsAttempt = 0
+        var result: Result<JSONObject>? = null
 
-        while (true) {
+        while (result == null) {
             try {
                 val builder = Request.Builder()
                     .url(baseUrl + path.trimStart('/'))
@@ -96,36 +97,43 @@ class ApiClient(context: Context) {
                     if (response.code == 401 && auth && retry) {
                         val refreshToken = sessionStore.get("refresh_token")
                         if (!refreshToken.isNullOrBlank() && refresh(refreshToken)) {
-                            return@withContext request(path, method, body, auth, false)
+                            result = request(path, method, body, auth, false)
+                        } else {
+                            logout()
                         }
-                        logout()
                     }
 
-                    if (!response.isSuccessful) {
+                    if (result == null && !response.isSuccessful) {
                         val msg = json.optJSONObject("error")?.optString("message")?.takeIf { it.isNotBlank() }
                             ?: json.optString("message").takeIf { it.isNotBlank() }
                             ?: "Request failed (" + response.code + ")"
-                        return@withContext Result.failure(IllegalStateException(msg))
+                        result = Result.failure(IllegalStateException(msg))
                     }
 
-                    return@withContext Result.success(json)
+                    if (result == null && response.isSuccessful) {
+                        result = Result.success(json)
+                    }
                 } finally {
                     response.close()
                 }
             } catch (e: UnknownHostException) {
-                // Mobile DNS can briefly fail even when the same host is reachable
-                // from the browser. Retry before surfacing the error to the admin.
                 if (dnsAttempt >= 2) {
-                    return@withContext Result.failure(
-                        IllegalStateException("Cannot connect to the backend. Please check your internet connection and try again.", e)
+                    result = Result.failure(
+                        IllegalStateException(
+                            "Cannot connect to the backend. Please check your internet connection and try again.",
+                            e
+                        )
                     )
+                } else {
+                    dnsAttempt++
+                    delay(700L * dnsAttempt)
                 }
-                dnsAttempt++
-                delay(700L * dnsAttempt)
             } catch (e: Exception) {
-                return@withContext Result.failure(e)
+                result = Result.failure(e)
             }
         }
+
+        result ?: Result.failure(IllegalStateException("Request did not produce a result"))
     }
 
     @Synchronized
