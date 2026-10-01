@@ -19,7 +19,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 private val Navy=Color(0xFF07111F);private val Yellow=Color(0xFFFFC107)
-private enum class Section(val title:String,val icon:androidx.compose.ui.graphics.vector.ImageVector){DASHBOARD("Dashboard",Icons.Default.Dashboard),PEOPLE("People",Icons.Default.People),VERIFICATION("Verification",Icons.Default.VerifiedUser),RIDES("Rides",Icons.Default.DirectionsCar),PAYMENTS("Payments",Icons.Default.Payments),EMERGENCY("Emergency",Icons.Default.Warning),SUPPORT("Support",Icons.Default.SupportAgent),PROMOTIONS("Promotions",Icons.Default.LocalOffer),NOTIFICATIONS("Notifications",Icons.Default.Notifications),ADMIN_USERS("Admin Users",Icons.Default.AdminPanelSettings),AUDIT("Audit Logs",Icons.Default.History),SETTINGS("Branding & Pricing",Icons.Default.Settings)}
+private enum class Section(val title:String,val icon:androidx.compose.ui.graphics.vector.ImageVector){DASHBOARD("Dashboard",Icons.Default.Dashboard),PEOPLE("People",Icons.Default.People),VERIFICATION("Provider Verification",Icons.Default.VerifiedUser),RIDES("Rides",Icons.Default.DirectionsCar),PAYMENTS("Payments",Icons.Default.Payments),EMERGENCY("Emergency",Icons.Default.Warning),SUPPORT("Support",Icons.Default.SupportAgent),PROMOTIONS("Promotions",Icons.Default.LocalOffer),NOTIFICATIONS("Notifications",Icons.Default.Notifications),ADMIN_USERS("Admin Users",Icons.Default.AdminPanelSettings),AUDIT("Audit Logs",Icons.Default.History),SETTINGS("Branding & Pricing",Icons.Default.Settings)}
 
 @Composable fun AdminApp(api:ApiClient){var logged by remember{mutableStateOf(api.isLoggedIn())};if(logged)Shell(api){api.logout();logged=false}else Login(api){logged=true}}
 
@@ -47,10 +47,15 @@ private fun DriverVerification(api: ApiClient) {
             loading = true
             error = null
             val endpoints = listOf(
-                "/admin/verification/requests?role=DRIVER&status=UNDER_VERIFICATION&limit=100",
-                "/admin/verification/requests?role=DRIVER&status=RESUBMITTED&limit=100",
-                "/admin/verification/requests?role=DRIVER&status=PENDING&limit=100"
-            )
+                "DRIVER" to "UNDER_VERIFICATION",
+                "DRIVER" to "RESUBMITTED",
+                "DRIVER" to "PENDING",
+                "GUIDE" to "UNDER_VERIFICATION",
+                "GUIDE" to "RESUBMITTED",
+                "GUIDE" to "PENDING"
+            ).map { (role, status) ->
+                "/admin/verification/requests?role=$role&status=$status&limit=100"
+            }
             var loaded = false
             for (endpoint in endpoints) {
                 if (loaded) break
@@ -93,8 +98,8 @@ private fun DriverVerification(api: ApiClient) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Driver Verification", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        Text("Review driver documents and live verification.", color = Color.Gray)
+                        Text("Provider Verification", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text("Review driver and guide documents and live verification.", color = Color.Gray)
                     }
                     OutlinedButton(onClick = { load() }, enabled = !loading) {
                         Text(if (loading) "Loading..." else "Refresh")
@@ -316,7 +321,7 @@ private fun RejectDialog(
 
 @Composable private fun AdminUsersAdmin(api:ApiClient){
     val scope=rememberCoroutineScope();var rows by remember{mutableStateOf<List<JSONObject>>(emptyList())};var err by remember{mutableStateOf<String?>(null)};var target by remember{mutableStateOf<String?>(null)};var permissions by remember{mutableStateOf("")}
-    fun load(){scope.launch{api.get("/admin/users?limit=100").onSuccess{rows=extract(it,"users")}.onFailure{err=it.message}}};LaunchedEffect(Unit){load()}
+    fun load(){scope.launch{api.get("/admin/users?limit=100").onSuccess{rows=extract(it,"items")}.onFailure{err=it.message}}};LaunchedEffect(Unit){load()}
     LazyColumn(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){item{Text("Admin Users",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold)};err?.let{item{Error(it)}};items(rows,key={it.optString("id")}){u->val id=u.optString("id");Card(Modifier.fillMaxWidth()){Column(Modifier.padding(14.dp)){Text(pretty(u),fontWeight=FontWeight.Bold);Text(compact(u),maxLines=5);OutlinedButton({scope.launch{api.get("/admin/rbac/users/"+id+"/permissions").onSuccess{val d=it.optJSONObject("data")?:it;permissions=d.optJSONArray("permissions")?.let{a->(0 until a.length()).joinToString(","){i->a.optString(i)}}?:"";target=id}.onFailure{err=it.message}}}){Text("Edit Permissions")}}}}}
     target?.let{id->AlertDialog(onDismissRequest={target=null},title={Text("Admin Permissions")},text={OutlinedTextField(permissions,{permissions=it},label={Text("Permissions, comma separated")},minLines=4,modifier=Modifier.fillMaxWidth())},confirmButton={Button({scope.launch{api.put("/admin/rbac/users/"+id+"/permissions",JSONObject().put("permissions",permissions.split(",").map{it.trim()}.filter{it.isNotBlank()})).onSuccess{target=null;load()}.onFailure{err=it.message}}}){Text("Save")}},dismissButton={TextButton({target=null}){Text("Close")}})}
 }
