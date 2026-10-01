@@ -65,6 +65,13 @@ fun AdminShell(api: ApiClient, onLogout: () -> Unit) {
                     }
                     Spacer(Modifier.height(8.dp))
                     AdminSection.values().forEach { item ->
+                        when (item) {
+                            AdminSection.DASHBOARD -> DrawerGroupLabel("Overview")
+                            AdminSection.EMERGENCY -> DrawerGroupLabel("Safety & operations")
+                            AdminSection.PAYMENTS -> DrawerGroupLabel("Finance")
+                            AdminSection.ADMIN_USERS -> DrawerGroupLabel("Administration")
+                            else -> Unit
+                        }
                         NavigationDrawerItem(
                             label = { Text(item.title) },
                             selected = section == item,
@@ -138,4 +145,15 @@ fun AdminShell(api: ApiClient, onLogout: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun DrawerGroupLabel(text: String) {
+    Text(
+        text,
+        color = Color.White.copy(alpha = .52f),
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(start = 14.dp, top = 14.dp, bottom = 5.dp)
+    )
 }
