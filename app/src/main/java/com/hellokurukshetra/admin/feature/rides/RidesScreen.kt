@@ -19,7 +19,8 @@ fun RidesScreen(api: ApiClient) {
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     var action by remember { mutableStateOf<Pair<String, String>?>(null) }
-    var input by remember { mutableStateOf("") }\n    var driverId by remember { mutableStateOf("") }
+    var input by remember { mutableStateOf("") }
+    var driverId by remember { mutableStateOf("") }
     var search by remember { mutableStateOf("") }
     var page by rememberSaveable { mutableIntStateOf(1) }
     var totalPages by remember { mutableIntStateOf(1) }
