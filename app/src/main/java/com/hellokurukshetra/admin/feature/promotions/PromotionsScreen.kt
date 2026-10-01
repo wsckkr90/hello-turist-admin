@@ -30,13 +30,6 @@ fun PromotionsScreen(api: ApiClient) {
   submit = false
   create = false
  }
- LaunchedEffect(create) {
-  if (create && code.isNotBlank() && title.isNotBlank()) {
-   api.post("/admin/promotions", JSONObject().put("code", code.trim().uppercase()).put("title", title.trim()).put("discountType", "PERCENTAGE").put("discountValue", value.toDoubleOrNull() ?: 0).put("isActive", true))
-     .onFailure { error = it.message }
-   create = false
-  }
- }
  LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
   item { PageHeader("Promotions", "Create and deactivate customer offers."); Button(onClick = { create = true }) { Text("Create promotion") } }
   error?.let { item { ErrorBanner(it) } }
