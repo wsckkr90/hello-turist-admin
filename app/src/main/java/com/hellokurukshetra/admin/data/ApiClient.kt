@@ -16,7 +16,6 @@ import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
-import java.security.SecureRandom
 import java.util.UUID
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -196,9 +195,11 @@ private class SessionStore(private val prefs: android.content.SharedPreferences)
 
     fun put(name: String, value: String) {
         val secret = key()
-        val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
+        // Let Android Keystore generate the GCM IV. Some Android Keystore
+        // implementations reject caller-provided IVs for randomized encryption.
         val cipher = Cipher.getInstance(transformation)
-        cipher.init(Cipher.ENCRYPT_MODE, secret, GCMParameterSpec(128, iv))
+        cipher.init(Cipher.ENCRYPT_MODE, secret)
+        val iv = cipher.iv
         val encrypted = cipher.doFinal(value.toByteArray(StandardCharsets.UTF_8))
         prefs.edit().putString(name, Base64.encodeToString(iv + encrypted, Base64.NO_WRAP)).apply()
     }
