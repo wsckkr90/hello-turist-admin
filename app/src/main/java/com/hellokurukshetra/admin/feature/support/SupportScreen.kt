@@ -52,7 +52,7 @@ fun SupportScreen(api: ApiClient) {
                     Text("Customer: " + row.optJSONObject("user")?.optString("name", row.optJSONObject("user")?.optString("username", "—")))
                     Text(summary(row), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedButton(onClick = { target = row }) { Text("Reply") }
+                        OutlinedButton(onClick = { target = row; status = row.optString("status", "OPEN") }) { Text("Manage") }
                         if (row.optString("status") != "CLOSED") {
                             TextButton(onClick = {
                                 scope.launch {
