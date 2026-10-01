@@ -11,8 +11,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.hellokurukshetra.admin.data.ApiClient
-import com.hellokurukshetra.admin.ui.AdminNavy
 import com.hellokurukshetra.admin.ui.AdminGold
+import com.hellokurukshetra.admin.ui.AdminNavy
 import com.hellokurukshetra.admin.ui.AdminShell
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -20,6 +20,7 @@ import org.json.JSONObject
 @Composable
 fun AdminApp(api: ApiClient) {
     var logged by remember { mutableStateOf(api.isLoggedIn()) }
+
     if (logged) {
         AdminShell(api) {
             api.logout()
@@ -32,52 +33,57 @@ fun AdminApp(api: ApiClient) {
 
 @Composable
 private fun AdminLogin(api: ApiClient, onLogin: () -> Unit) {
-    var id by remember { mutableStateOf("") }
+    var identifier by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    Box(
-        Modifier.fillMaxSize().background(AdminNavy),
-        contentAlignment = Alignment.Center
-    ) {
+    Box(Modifier.fillMaxSize().background(AdminNavy), contentAlignment = Alignment.Center) {
         Card(Modifier.padding(24.dp).fillMaxWidth().widthIn(max = 460.dp)) {
             Column(Modifier.padding(30.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text("HELLO KURUKSHETRA", color = AdminNavy, fontWeight = FontWeight.Bold)
                 Text("Admin Control Center", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Text("Manage people, rides, safety, payments and content from one place.", color = Color.Gray)
-                OutlinedTextField(id, { id = it }, label = { Text("Username or email") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                Text("Secure operations for people, rides, safety, payments and content.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedTextField(
+                    identifier,
+                    { identifier = it; error = null },
+                    label = { Text("Username or email") },
+                    singleLine = true,
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    password,
+                    { password = it; error = null },
+                    label = { Text("Password") },
+                    singleLine = true,
+                    enabled = !busy,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Button(
-                    enabled = !busy,
+                    enabled = !busy && identifier.isNotBlank() && password.isNotBlank(),
                     onClick = {
-                        if (id.isBlank() || password.isBlank()) {
-                            error = "Enter username and password"
-                            return@Button
-                        }
                         busy = true
+                        error = null
                         scope.launch {
-                            api.login(id, password)
+                            api.login(identifier, password)
                                 .onSuccess { root ->
                                     val data = root.optJSONObject("data") ?: JSONObject()
                                     api.saveSession(data)
-                                    api.get("/admin/analytics")
-                                        .onSuccess { onLogin() }
-                                        .onFailure {
-                                            api.logout()
-                                            error = "This account does not have active admin access."
-                                        }
+                                    if (api.isLoggedIn()) onLogin()
+                                    else error = "Login succeeded but no access token was returned."
                                 }
-                                .onFailure { error = it.message }
+                                .onFailure { error = it.message ?: "Unable to sign in" }
                             busy = false
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = AdminGold, contentColor = AdminNavy),
                     modifier = Modifier.fillMaxWidth().height(52.dp)
                 ) {
-                    if (busy) CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                    if (busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = AdminNavy)
                     else Text("SIGN IN", fontWeight = FontWeight.Bold)
                 }
             }
