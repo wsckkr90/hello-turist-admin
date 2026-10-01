@@ -137,7 +137,7 @@ fun RidesScreen(api: ApiClient) {
                     }
                 ) { Text("Confirm") }
             },
-            dismissButton = { TextButton(onClick = { action = null; input = "" }) { Text("Close") } }
+            dismissButton = { TextButton(onClick = { action = null; input = ""; driverId = "" }) { Text("Close") } }
         )
     }
 
