@@ -84,7 +84,8 @@ class ApiClient(context: Context) {
                     else -> builder.get()
                 }
 
-                client.newCall(builder.build()).execute().use { response ->
+                val response = client.newCall(builder.build()).execute()
+                try {
                     val raw = response.body?.string().orEmpty()
                     val json = runCatching {
                         JSONObject(if (raw.isBlank()) "{}" else raw)
@@ -108,6 +109,8 @@ class ApiClient(context: Context) {
                     }
 
                     return@withContext Result.success(json)
+                } finally {
+                    response.close()
                 }
             } catch (e: UnknownHostException) {
                 // Mobile DNS can briefly fail even when the same host is reachable
