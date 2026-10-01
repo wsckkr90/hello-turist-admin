@@ -18,21 +18,38 @@ fun EmergencyScreen(api: ApiClient) {
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     var action by remember { mutableStateOf<Pair<String, String>?>(null) }
-    var responderId by remember { mutableStateOf("") }
+    var responderId by remember { mutableStateOf("") }\n    var stateFilter by remember { mutableStateOf("") }\n    var categoryFilter by remember { mutableStateOf("") }
     var refreshKey by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(refreshKey) {
         loading = true
         error = null
-        api.get("/admin/emergency/incidents?limit=100")
+        api.get(buildString {\n                append("/admin/emergency/incidents?limit=100")\n                if (stateFilter.isNotBlank()) append("&state=").append(stateFilter)\n                if (categoryFilter.isNotBlank()) append("&category=").append(java.net.URLEncoder.encode(categoryFilter.trim(), "UTF-8"))\n            })
             .onSuccess { rows = extract(it, "items") }
             .onFailure { error = it.message ?: "Unable to load emergency incidents" }
         loading = false
     }
 
     LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { PageHeader("Emergency response", "Monitor incidents, state transitions and responders.", { refreshKey++ }, loading) }
+        item { PageHeader("Emergency response", "Monitor incidents, state transitions and responders.", { refreshKey++ }, loading) }\n        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                FilterChip(selected = stateFilter.isBlank(), onClick = { stateFilter = "" }, label = { Text("All states") })
+                FilterChip(selected = stateFilter == "TRIGGERED", onClick = { stateFilter = "TRIGGERED" }, label = { Text("Triggered") })
+                FilterChip(selected = stateFilter == "ACKNOWLEDGED", onClick = { stateFilter = "ACKNOWLEDGED" }, label = { Text("Acknowledged") })
+                FilterChip(selected = stateFilter == "ESCALATED", onClick = { stateFilter = "ESCALATED" }, label = { Text("Escalated") })
+                FilterChip(selected = stateFilter == "RESOLVED", onClick = { stateFilter = "RESOLVED" }, label = { Text("Resolved") })
+            }
+        }
+        item {
+            OutlinedTextField(
+                categoryFilter,
+                { categoryFilter = it },
+                label = { Text("Filter category") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
         error?.let { item { ErrorBanner(it) { refreshKey++ } } }
         if (loading && rows.isEmpty()) item { LoadingState("Loading emergency incidents…") }
         if (!loading && rows.isEmpty() && error == null) item { EmptyState("No emergency incidents.") }
@@ -126,7 +143,13 @@ fun EmergencyScreen(api: ApiClient) {
                         }
                     }
                     item {
-                        OutlinedTextField(responderId, { responderId = it }, label = { Text("Responder user ID") }, singleLine = true)
+                        AdminPersonPicker(
+                            api = api,
+                            label = "Responder",
+                            selectedId = responderId,
+                            onSelected = { responderId = it },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                     item {
                         Button(
