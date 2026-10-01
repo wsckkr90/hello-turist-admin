@@ -39,4 +39,14 @@ fun PaymentsScreen(api: ApiClient) {
    }
   }
  }
+ if (confirmRefundId != null) {
+  AlertDialog(
+   onDismissRequest = { confirmRefundId = null },
+   title = { Text("Confirm refund") },
+   text = { Text("Are you sure you want to initiate a refund for this payment?") },
+   confirmButton = { Button(onClick = { refundId = confirmRefundId; confirmRefundId = null }) { Text("Confirm refund") } },
+   dismissButton = { TextButton(onClick = { confirmRefundId = null }) { Text("Cancel") } }
+  )
+ }
+
 }
