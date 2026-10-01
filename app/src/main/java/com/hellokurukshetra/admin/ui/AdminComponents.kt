@@ -156,7 +156,7 @@ fun summary(j: JSONObject): String {
         if (value == null || value == JSONObject.NULL || value.toString().isBlank()) null
         else "$key: $value"
     }
-    return values.take(4).joinToString(" • ").ifBlank { "ID: \${j.optString("id")}" }
+    return values.take(4).joinToString(" • ").ifBlank { "ID: " + j.optString("id") }
 }
 
 fun stringArray(json: JSONObject?, key: String): List<String> {
