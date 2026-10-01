@@ -18,21 +18,28 @@ fun EmergencyScreen(api: ApiClient) {
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     var action by remember { mutableStateOf<Pair<String, String>?>(null) }
-    var responderId by remember { mutableStateOf("") }\n    var stateFilter by remember { mutableStateOf("") }\n    var categoryFilter by remember { mutableStateOf("") }
+    var responderId by remember { mutableStateOf("") }
+    var stateFilter by remember { mutableStateOf("") }
+    var categoryFilter by remember { mutableStateOf("") }
     var refreshKey by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(refreshKey) {
         loading = true
         error = null
-        api.get(buildString {\n                append("/admin/emergency/incidents?limit=100")\n                if (stateFilter.isNotBlank()) append("&state=").append(stateFilter)\n                if (categoryFilter.isNotBlank()) append("&category=").append(java.net.URLEncoder.encode(categoryFilter.trim(), "UTF-8"))\n            })
+        api.get(buildString {
+                append("/admin/emergency/incidents?limit=100")
+                if (stateFilter.isNotBlank()) append("&state=").append(stateFilter)
+                if (categoryFilter.isNotBlank()) append("&category=").append(java.net.URLEncoder.encode(categoryFilter.trim(), "UTF-8"))
+            })
             .onSuccess { rows = extract(it, "items") }
             .onFailure { error = it.message ?: "Unable to load emergency incidents" }
         loading = false
     }
 
     LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { PageHeader("Emergency response", "Monitor incidents, state transitions and responders.", { refreshKey++ }, loading) }\n        item {
+        item { PageHeader("Emergency response", "Monitor incidents, state transitions and responders.", { refreshKey++ }, loading) }
+        item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 FilterChip(selected = stateFilter.isBlank(), onClick = { stateFilter = "" }, label = { Text("All states") })
                 FilterChip(selected = stateFilter == "TRIGGERED", onClick = { stateFilter = "TRIGGERED" }, label = { Text("Triggered") })
