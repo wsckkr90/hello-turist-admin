@@ -8,6 +8,8 @@ import androidx.compose.ui.unit.dp
 import com.hellokurukshetra.admin.data.ApiClient
 import com.hellokurukshetra.admin.ui.*
 import org.json.JSONObject
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 @Composable
 fun PromotionsScreen(api: ApiClient) {
  var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
@@ -26,7 +28,14 @@ fun PromotionsScreen(api: ApiClient) {
  }
  LaunchedEffect(submit) {
   if (!submit) return@LaunchedEffect
-  if (code.isNotBlank() && title.isNotBlank()) api.post("/admin/promotions", JSONObject().put("code", code.trim().uppercase()).put("title", title.trim()).put("discountType", "PERCENTAGE").put("discountValue", value.toDoubleOrNull() ?: 0).put("isActive", true)).onFailure { error = it.message }
+  if (code.isNotBlank() && title.isNotBlank()) api.post("/admin/promotions", JSONObject()
+   .put("code", code.trim().uppercase())
+   .put("title", title.trim())
+   .put("discountType", "PERCENTAGE")
+   .put("discountValue", value.toDoubleOrNull() ?: 0)
+   .put("startsAt", Instant.now().toString())
+   .put("expiresAt", Instant.now().plus(30, ChronoUnit.DAYS).toString())
+   .put("isActive", true)).onFailure { error = it.message }
   submit = false
   create = false
  }
