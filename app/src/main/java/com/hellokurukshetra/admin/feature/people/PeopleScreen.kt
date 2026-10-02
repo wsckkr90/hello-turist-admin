@@ -16,6 +16,8 @@ import org.json.JSONObject
 fun PeopleScreen(api: ApiClient) {
     var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var selected by remember { mutableStateOf<JSONObject?>(null) }
+    var editing by remember { mutableStateOf<JSONObject?>(null) }
+    var showForm by rememberSaveable { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     var search by remember { mutableStateOf("") }
@@ -45,7 +47,10 @@ fun PeopleScreen(api: ApiClient) {
 
     LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
-            PageHeader("People", "Search riders, drivers and guides from the live user directory.", { refreshKey++ }, loading)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                PageHeader("People", "Search riders, drivers and guides from the live user directory.", { refreshKey++ }, loading)
+                Button(onClick = { editing = null; showForm = true }) { Text("Add person") }
+            }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -78,10 +83,13 @@ fun PeopleScreen(api: ApiClient) {
                     Text(summary(row), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     val roles = stringArrayFromRoles(row)
                     if (roles.isNotEmpty()) Text(roles.joinToString(" • "), style = MaterialTheme.typography.labelMedium)
-                    TextButton(onClick = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = {
                         val id = row.optString("id")
                         scope.launch { api.get("/admin/people/" + id).onSuccess { selected = dataObject(it) }.onFailure { error = it.message } }
-                    }) { Text("View details") }
+                        }) { Text("View details") }
+                        TextButton(onClick = { editing = row; showForm = true }) { Text("Edit") }
+                    }
                 }
             }
         }
@@ -109,9 +117,33 @@ fun PeopleScreen(api: ApiClient) {
                     Text("Created: " + row.optString("createdAt", "—"))
                 }
             },
-            confirmButton = { TextButton(onClick = { selected = null }) { Text("Close") } }
+            confirmButton = { TextButton(onClick = { selected = null }) { Text("Close") } },
+            dismissButton = { TextButton(onClick = { val id=row.optString("id"); scope.launch { api.delete("/admin/people/$id").onSuccess { selected=null; refreshKey++ }.onFailure { error=it.message } } }) { Text("Deactivate") } }
         )
     }
+    if (showForm) PersonForm(api, editing, { showForm=false; refreshKey++ }, { error=it })
+}
+
+@Composable
+private fun PersonForm(api: ApiClient, existing: JSONObject?, onDone: () -> Unit, onError: (String) -> Unit) {
+    val scope=rememberCoroutineScope()
+    var name by remember { mutableStateOf(existing?.optString("name").orEmpty()) }
+    var username by remember { mutableStateOf(existing?.optString("username").orEmpty()) }
+    var email by remember { mutableStateOf(existing?.optString("email").orEmpty()) }
+    var phone by remember { mutableStateOf(existing?.optString("phone").orEmpty()) }
+    var password by remember { mutableStateOf("") }
+    var role by remember { mutableStateOf(existing?.optJSONArray("roles")?.optJSONObject(0)?.optString("role") ?: "RIDER") }
+    var busy by remember { mutableStateOf(false) }
+    AlertDialog(onDismissRequest=onDone,title={Text(if(existing==null)"Add person" else "Edit person")},text={
+        Column(verticalArrangement=Arrangement.spacedBy(8.dp),modifier=Modifier.heightIn(max=520.dp)) {
+            OutlinedTextField(name,{name=it},"Name",singleLine=true,modifier=Modifier.fillMaxWidth())
+            OutlinedTextField(username,{username=it},"Username",singleLine=true,modifier=Modifier.fillMaxWidth())
+            OutlinedTextField(email,{email=it},"Email",singleLine=true,modifier=Modifier.fillMaxWidth())
+            OutlinedTextField(phone,{phone=it},"Phone",singleLine=true,modifier=Modifier.fillMaxWidth())
+            OutlinedTextField(password,{password=it},"Password ${if(existing==null)"(8+ chars required)" else "(optional)"}",singleLine=true,modifier=Modifier.fillMaxWidth())
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){listOf("RIDER","DRIVER","GUIDE").forEach{r->FilterChip(role==r,{role=r},{Text(r)})}}
+        }
+    },confirmButton={Button(enabled=!busy&&name.isNotBlank()&&username.isNotBlank()&&(existing!=null||password.length>=8),onClick={scope.launch{busy=true;val body=JSONObject().put("name",name.trim()).put("username",username.trim()).put("email",email).put("phone",phone).put("role",role);if(password.isNotBlank())body.put("password",password);val r=if(existing==null)api.post("/admin/people",body)else api.patch("/admin/people/${existing.optString("id")}",body);r.onSuccess{onDone()}.onFailure{onError(it.message?:"Save failed")};busy=false}}){Text(if(existing==null)"Create" else "Save")}},dismissButton={TextButton(onClick=onDone){Text("Cancel")}})
 }
 
 private fun stringArrayFromRoles(row: JSONObject): List<String> {
