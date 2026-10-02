@@ -15,7 +15,6 @@ import com.hellokurukshetra.admin.data.ApiClient
 import com.hellokurukshetra.admin.feature.adminusers.AdminUsersScreen
 import com.hellokurukshetra.admin.feature.audit.AuditScreen
 import com.hellokurukshetra.admin.feature.dashboard.DashboardScreen
-import com.hellokurukshetra.admin.feature.content.ContentScreen
 import com.hellokurukshetra.admin.feature.emergency.EmergencyScreen
 import com.hellokurukshetra.admin.feature.notifications.NotificationsScreen
 import com.hellokurukshetra.admin.feature.payments.PaymentsScreen
@@ -35,7 +34,6 @@ enum class AdminSection(val title: String, val icon: androidx.compose.ui.graphic
     EMERGENCY("Emergency", Icons.Default.Warning),
     SUPPORT("Support", Icons.Default.SupportAgent),
     PROMOTIONS("Promotions", Icons.Default.LocalOffer),
-    CONTENT("Places & Partners", Icons.Default.Place),
     NOTIFICATIONS("Notifications", Icons.Default.Notifications),
     ADMIN_USERS("Admin Users", Icons.Default.AdminPanelSettings),
     AUDIT("Audit Logs", Icons.Default.History),
@@ -139,7 +137,6 @@ fun AdminShell(api: ApiClient, onLogout: () -> Unit) {
                     AdminSection.EMERGENCY -> EmergencyScreen(api)
                     AdminSection.SUPPORT -> SupportScreen(api)
                     AdminSection.PROMOTIONS -> PromotionsScreen(api)
-                    AdminSection.CONTENT -> ContentScreen(api)
                     AdminSection.NOTIFICATIONS -> NotificationsScreen(api)
                     AdminSection.ADMIN_USERS -> AdminUsersScreen(api)
                     AdminSection.AUDIT -> AuditScreen(api)
