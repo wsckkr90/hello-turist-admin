@@ -90,7 +90,7 @@ fun PeopleScreen(api: ApiClient) {
             title = { Text(displayName(row)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Username: " + row.optString("username", "—"))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {\n                        AdminAvatar(displayName(row), row.optString("profileImageUrl").takeIf { it.isNotBlank() })\n                        Column {\n                            Text(displayName(row), style = MaterialTheme.typography.titleMedium)\n                            Text(row.optString("username", "—"), color = MaterialTheme.colorScheme.onSurfaceVariant)\n                        }\n                    }\n                    Text("Username: " + row.optString("username", "—"))
                     Text("Email: " + row.optString("email", "—"))
                     Text("Status: " + row.optString("status", "—"))
                     Text("Language: " + row.optString("preferredLanguage", "—"))
