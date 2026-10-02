@@ -3,6 +3,10 @@ package com.hellokurukshetra.admin.feature.emergency
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.material3.*
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
+import java.util.Locale
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -13,6 +17,7 @@ import org.json.JSONObject
 
 @Composable
 fun EmergencyScreen(api: ApiClient) {
+    val context = LocalContext.current
     var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var selected by remember { mutableStateOf<JSONObject?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -113,8 +118,72 @@ fun EmergencyScreen(api: ApiClient) {
                     item { Text("State: " + incident?.optString("state", "—")) }
                     item { Text("Category: " + incident?.optString("category", "—")) }
                     item { Text("Trigger: " + incident?.optString("triggerSource", "—")) }
-                    item { Text("Rider: " + detail.optJSONObject("rider")?.optString("name", "—")) }
-                    item { Text("Ride: " + detail.optJSONObject("ride")?.optString("status", "—")) }
+                    val rider = detail.optJSONObject("rider")
+                    item { Text("Rider", style = MaterialTheme.typography.labelLarge) }
+                    item { Text((rider?.optString("name", "—") ?: "—") + " • " + (rider?.optString("username", "—") ?: "—")) }
+                    val ride = detail.optJSONObject("ride")
+                    item { Text("Ride: " + ride?.optString("status", "—")) }
+                    val assignments = ride?.optJSONArray("assignments")
+                    item { Text("Assigned driver", style = MaterialTheme.typography.labelLarge) }
+                    if (assignments == null || assignments.length() == 0) {
+                        item { Text("No driver assignment found.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    } else {
+                        repeat(assignments.length()) { index ->
+                            val assignment = assignments.optJSONObject(index) ?: JSONObject()
+                            val driver = assignment.optJSONObject("driver")
+                            item { Text("• " + (driver?.optString("name", "Unknown") ?: "Unknown") + " — " + assignment.optString("status", "—")) }
+                        }
+                    }
+                    val snapshot = incident?.optJSONObject("locationSnapshot")
+                    val lat = snapshot?.optDouble("latitude", Double.NaN)
+                    val lon = snapshot?.optDouble("longitude", Double.NaN)
+                    item { Text("Emergency location", style = MaterialTheme.typography.labelLarge) }
+                    if (lat != null && lon != null && !lat.isNaN() && !lon.isNaN()) {
+                        item {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(String.format(Locale.US, "%.6f, %.6f", lat, lon), modifier = Modifier.weight(1f))
+                                TextButton(onClick = {
+                                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:$lat,$lon?q=$lat,$lon"))) }
+                                }) { Text("Map") }
+                            }
+                        }
+                    } else {
+                        item { Text("No location snapshot available.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
+                    val locations = ride?.optJSONArray("locations")
+                    item { Text("Ride location trail", style = MaterialTheme.typography.labelLarge) }
+                    if (locations == null || locations.length() == 0) {
+                        item { Text("No recorded ride locations.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    } else {
+                        repeat(minOf(locations.length(), 10)) { index ->
+                            val point = locations.optJSONObject(index) ?: JSONObject()
+                            val pLat = point.optString("latitude")
+                            val pLon = point.optString("longitude")
+                            item {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("$pLat, $pLon", modifier = Modifier.weight(1f))
+                                    TextButton(onClick = {
+                                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:$pLat,$pLon?q=$pLat,$pLon"))) }
+                                    }) { Text("Map") }
+                                }
+                            }
+                        }
+                    }
+                    val rideEvents = ride?.optJSONArray("events")
+                    val mediaEvents = rideEvents?.let { events ->
+                        (0 until events.length()).mapNotNull { i ->
+                            events.optJSONObject(i)?.takeIf { it.optJSONObject("payload")?.optString("kind") == "RECORDING_UPLOADED" }
+                        }
+                    }.orEmpty()
+                    item { Text("Safety media", style = MaterialTheme.typography.labelLarge) }
+                    if (mediaEvents.isEmpty()) {
+                        item { Text("No audio/video recording metadata found.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    } else {
+                        mediaEvents.forEach { event ->
+                            val payload = event.optJSONObject("payload") ?: JSONObject()
+                            item { Text("• " + payload.optString("media", "MEDIA") + " • " + payload.optString("contentType", "—") + " • expires " + payload.optString("expiresAt", "—")) }
+                        }
+                    }
                     item {
                         Text("Responders", style = MaterialTheme.typography.titleMedium)
                     }
