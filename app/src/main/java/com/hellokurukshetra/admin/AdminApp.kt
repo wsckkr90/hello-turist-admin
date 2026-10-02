@@ -20,6 +20,27 @@ import org.json.JSONObject
 @Composable
 fun AdminApp(api: ApiClient) {
     var logged by remember { mutableStateOf(api.isLoggedIn()) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    LaunchedEffect(logged) {
+        if (!logged) return@LaunchedEffect
+        val seen = mutableSetOf<String>()
+        var initialized = false
+        while (api.isLoggedIn()) {
+            api.get("/admin/emergency/incidents?state=TRIGGERED&limit=50").onSuccess { root ->
+                val items = root.optJSONObject("data")?.optJSONArray("items") ?: root.optJSONArray("items")
+                val current = mutableListOf<Pair<String, Pair<String,String>>>()
+                for (i in 0 until (items?.length() ?: 0)) {
+                    val o=items!!.optJSONObject(i) ?: continue
+                    val id=o.optString("id"); if(id.isBlank()) continue
+                    current += id to (o.optString("riderName","Rider") to o.optString("category","EMERGENCY"))
+                }
+                if (initialized) current.filterNot { seen.contains(it.first) }.forEach { (id, info) -> EmergencyAlertManager.alert(context, id, info.first, info.second) }
+                seen.clear(); seen.addAll(current.map{it.first}); initialized=true
+            }
+            kotlinx.coroutines.delay(5_000L)
+        }
+    }
 
     if (logged) {
         AdminShell(api) {

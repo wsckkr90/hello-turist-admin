@@ -1,5 +1,7 @@
 package com.hellokurukshetra.admin.feature.verification
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.material3.*
@@ -24,6 +26,7 @@ fun VerificationScreen(api: ApiClient) {
     var rejectionReason by remember { mutableStateOf("") }
     var refreshKey by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     suspend fun load() {
         loading = true
@@ -81,6 +84,20 @@ fun VerificationScreen(api: ApiClient) {
                             val id = row.optString("id")
                             scope.launch { api.get("/admin/verification/requests/" + id).onSuccess { selected = dataObject(it) }.onFailure { error = it.message } }
                         }) { Text("Review") }
+                        OutlinedButton(onClick = {
+                            val phone = user?.optString("phone").orEmpty()
+                            val url = if (phone.isNotBlank()) "https://wa.me/" + phone.filter { it.isDigit() } else "https://www.whatsapp.com/"
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        }) { Text("WhatsApp") }
+                        Button(onClick = {
+                            val id = row.optString("id")
+                            scope.launch {
+                                val phone = user?.optString("phone").orEmpty()
+                                api.post("/admin/verification/requests/$id/live-whatsapp", JSONObject().put("phone", phone))
+                                    .onSuccess { refreshKey++ }
+                                    .onFailure { error = it.message ?: "Unable to start live verification" }
+                            }
+                        }) { Text("Start Live") }
                         Button(onClick = { decisionId = row.optString("id") }) { Text("Approve") }
                         OutlinedButton(onClick = { decisionId = "REJECT:" + row.optString("id") }) { Text("Reject") }
                     }
@@ -138,6 +155,19 @@ fun VerificationScreen(api: ApiClient) {
                     item { Text("Role: " + row.optString("role", "—")) }
                     item { Text("Status: " + row.optString("status", "—")) }
                     item { Text("Documents: " + (row.optJSONArray("documents")?.length() ?: 0)) }
+                    item { Text("Phone: " + row.optJSONObject("user")?.optString("phone", "—")) }
+                    item { Text("Live session reference: " + row.optJSONObject("liveSession")?.optString("providerReference", "—")) }
+                    item { Text("Live session started: " + row.optJSONObject("liveSession")?.optString("startedAt", "—")) }
+                    item {
+                        Text("Documents", style = MaterialTheme.typography.titleSmall)
+                        val docs = row.optJSONArray("documents")
+                        if (docs == null || docs.length() == 0) Text("No documents uploaded yet.")
+                        else for (i in 0 until docs.length()) {
+                            val d = docs.optJSONObject(i)
+                            Text("• " + d?.optString("documentType", "Document") + " — " + d?.optString("verificationStatus", "PENDING") +
+                                (d?.optString("expiryDate")?.takeIf { it.isNotBlank() }?.let { " • Expiry: $it" } ?: ""))
+                        }
+                    }
                     item { Text("Live session: " + row.optJSONObject("liveSession")?.optString("status", "—")) }
                     item { Text("Created: " + row.optString("createdAt", "—")) }
                 }
