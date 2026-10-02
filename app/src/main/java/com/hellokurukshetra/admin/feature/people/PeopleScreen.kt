@@ -67,8 +67,12 @@ fun PeopleScreen(api: ApiClient) {
         items(rows, key = { it.optString("id") }) { row ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(displayName(row), style = MaterialTheme.typography.titleMedium)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AdminAvatar(displayName(row), row.optString("profileImageUrl").takeIf { it.isNotBlank() })
+                        Column(Modifier.weight(1f)) {
+                            Text(displayName(row), style = MaterialTheme.typography.titleMedium)
+                            Text(row.optString("username", "—"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         StatusBadge(row.optString("status", "ACTIVE"))
                     }
                     Text(summary(row), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -90,7 +94,14 @@ fun PeopleScreen(api: ApiClient) {
             title = { Text(displayName(row)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {\n                        AdminAvatar(displayName(row), row.optString("profileImageUrl").takeIf { it.isNotBlank() })\n                        Column {\n                            Text(displayName(row), style = MaterialTheme.typography.titleMedium)\n                            Text(row.optString("username", "—"), color = MaterialTheme.colorScheme.onSurfaceVariant)\n                        }\n                    }\n                    Text("Username: " + row.optString("username", "—"))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AdminAvatar(displayName(row), row.optString("profileImageUrl").takeIf { it.isNotBlank() })
+                        Column {
+                            Text(displayName(row), style = MaterialTheme.typography.titleMedium)
+                            Text(row.optString("username", "—"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Text("Username: " + row.optString("username", "—"))
                     Text("Email: " + row.optString("email", "—"))
                     Text("Status: " + row.optString("status", "—"))
                     Text("Language: " + row.optString("preferredLanguage", "—"))
