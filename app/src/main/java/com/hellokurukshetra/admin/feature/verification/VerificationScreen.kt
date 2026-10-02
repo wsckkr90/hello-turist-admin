@@ -89,15 +89,6 @@ fun VerificationScreen(api: ApiClient) {
                             val url = if (phone.isNotBlank()) "https://wa.me/" + phone.filter { it.isDigit() } else "https://www.whatsapp.com/"
                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                         }) { Text("WhatsApp") }
-                        Button(onClick = {
-                            val id = row.optString("id")
-                            scope.launch {
-                                val phone = user?.optString("phone").orEmpty()
-                                api.post("/admin/verification/requests/$id/live-whatsapp", JSONObject().put("phone", phone))
-                                    .onSuccess { refreshKey++ }
-                                    .onFailure { error = it.message ?: "Unable to start live verification" }
-                            }
-                        }) { Text("Start Live") }
                         Button(onClick = { decisionId = row.optString("id") }) { Text("Approve") }
                         OutlinedButton(onClick = { decisionId = "REJECT:" + row.optString("id") }) { Text("Reject") }
                     }
