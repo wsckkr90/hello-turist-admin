@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.material3.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -17,6 +18,7 @@ import java.util.Locale
 
 @Composable
 fun RidesScreen(api: ApiClient) {
+    val context = LocalContext.current
     var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var selected by remember { mutableStateOf<JSONObject?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
