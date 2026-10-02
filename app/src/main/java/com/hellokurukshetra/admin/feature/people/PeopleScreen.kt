@@ -16,8 +16,6 @@ import org.json.JSONObject
 fun PeopleScreen(api: ApiClient) {
     var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var selected by remember { mutableStateOf<JSONObject?>(null) }
-    var editing by remember { mutableStateOf<JSONObject?>(null) }
-    var showForm by rememberSaveable { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     var search by remember { mutableStateOf("") }
@@ -49,7 +47,6 @@ fun PeopleScreen(api: ApiClient) {
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 PageHeader("People", "Search riders, drivers and guides from the live user directory.", { refreshKey++ }, loading)
-                Button(onClick = { editing = null; showForm = true }) { Text("Add person") }
             }
         }
         item {
@@ -89,7 +86,6 @@ fun PeopleScreen(api: ApiClient) {
                         val id = row.optString("id")
                         scope.launch { api.get("/admin/people/" + id).onSuccess { selected = dataObject(it) }.onFailure { error = it.message } }
                         }) { Text("View details") }
-                        TextButton(onClick = { editing = row; showForm = true }) { Text("Edit") }
                     }
                 }
             }
@@ -119,11 +115,9 @@ fun PeopleScreen(api: ApiClient) {
                     Text("Created: " + row.optString("createdAt", "—"))
                 }
             },
-            confirmButton = { TextButton(onClick = { selected = null }) { Text("Close") } },
-            dismissButton = { TextButton(onClick = { val id=row.optString("id"); scope.launch { api.delete("/admin/people/$id").onSuccess { selected=null; refreshKey++ }.onFailure { error=it.message } } }) { Text("Deactivate") } }
+            confirmButton = { TextButton(onClick = { selected = null }) { Text("Close") } }
         )
     }
-    if (showForm) PersonForm(api, editing, { showForm=false; refreshKey++ }, { error=it })
 }
 
 @Composable
