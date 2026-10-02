@@ -15,7 +15,6 @@ import com.hellokurukshetra.admin.ui.AdminGold
 import com.hellokurukshetra.admin.ui.AdminNavy
 import com.hellokurukshetra.admin.ui.AdminShell
 import com.hellokurukshetra.admin.ui.EmergencyAlertManager
-import com.hellokurukshetra.admin.ui.EmergencyAlertManager
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
