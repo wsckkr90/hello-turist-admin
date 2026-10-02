@@ -52,6 +52,7 @@ class ApiClient(context: Context) {
         request("/auth/login", "POST", JSONObject().put("identifier", identifier.trim()).put("password", password), false)
 
     suspend fun get(path: String) = request(path, "GET", null, true)
+    suspend fun delete(path: String) = request(path, "DELETE", null, true)
     suspend fun post(path: String, body: JSONObject? = null) = request(path, "POST", body, true)
     suspend fun patch(path: String, body: JSONObject) = request(path, "PATCH", body, true)
     suspend fun put(path: String, body: JSONObject) = request(path, "PUT", body, true)
@@ -116,6 +117,7 @@ class ApiClient(context: Context) {
                     "POST" -> builder.post(requestBody ?: ByteArray(0).toRequestBody(null))
                     "PATCH" -> builder.patch(requestBody ?: ByteArray(0).toRequestBody(null))
                     "PUT" -> builder.put(requestBody ?: ByteArray(0).toRequestBody(null))
+                    "DELETE" -> builder.delete(requestBody)
                     else -> builder.get()
                 }
 
