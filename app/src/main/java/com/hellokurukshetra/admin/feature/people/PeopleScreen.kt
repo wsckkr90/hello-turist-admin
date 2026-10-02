@@ -79,6 +79,7 @@ fun PeopleScreen(api: ApiClient) {
                             Text(row.optString("username", "—"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         StatusBadge(row.optString("status", "ACTIVE"))
+                        if (hasVerifiedProviderRole(row)) Text("✓ Verified", color = AdminSuccess, style = MaterialTheme.typography.labelMedium)
                     }
                     Text(summary(row), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     val roles = stringArrayFromRoles(row)
@@ -114,6 +115,7 @@ fun PeopleScreen(api: ApiClient) {
                     Text("Status: " + row.optString("status", "—"))
                     Text("Language: " + row.optString("preferredLanguage", "—"))
                     Text("Roles: " + rolesText(row))
+                    if (hasVerifiedProviderRole(row)) Text("✓ Provider verified", color = AdminSuccess, style = MaterialTheme.typography.labelMedium)
                     Text("Created: " + row.optString("createdAt", "—"))
                 }
             },
@@ -152,3 +154,12 @@ private fun stringArrayFromRoles(row: JSONObject): List<String> {
 }
 
 private fun rolesText(row: JSONObject): String = stringArrayFromRoles(row).joinToString(", ").ifBlank { "—" }
+
+private fun hasVerifiedProviderRole(row: JSONObject): Boolean {
+    val roles = row.optJSONArray("roles") ?: return false
+    for (i in 0 until roles.length()) {
+        val r = roles.optJSONObject(i) ?: continue
+        if ((r.optString("role") == "DRIVER" || r.optString("role") == "GUIDE") && r.optString("verificationStatus") == "VERIFIED") return true
+    }
+    return false
+}
