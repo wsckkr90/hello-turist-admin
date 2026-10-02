@@ -47,10 +47,206 @@ fun ContentScreen(api: ApiClient) {
     }
     if(showForm)ContentForm(api,type,editing,{showForm=false;reload()},{error=it})
 }
-@Composable private fun ContentForm(api:ApiClient,type:String,existing:ContentItem?,onDone:()->Unit,onError:(String)->Unit){
-    val context=LocalContext.current;val scope=rememberCoroutineScope();var name by remember{mutableStateOf(existing?.name.orEmpty())};var description by remember{mutableStateOf(existing?.description.orEmpty())};var address by remember{mutableStateOf(existing?.address.orEmpty())};var city by remember{mutableStateOf(existing?.city.orEmpty())};var lat by remember{mutableStateOf(existing?.latitude?.toString().orEmpty())};var lon by remember{mutableStateOf(existing?.longitude?.toString().orEmpty())};var imageUrl by remember{mutableStateOf(existing?.imageUrl.orEmpty())};var phone by remember{mutableStateOf(existing?.phone.orEmpty())};var email by remember{mutableStateOf(existing?.email.orEmpty())};var website by remember{mutableStateOf(existing?.website.orEmpty())};var busy by remember{mutableStateOf(false)}
-    val picker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->if(uri!=null)scope.launch{busy=true;api.uploadContentImage(uri).onSuccess{imageUrl=it}.onFailure{onError(it.message?:"Image upload failed")};busy=false}}
-    AlertDialog(onDismissRequest=onDone,title={Text(if(existing==null)"Add "+typeLabel(type) else "Edit "+typeLabel(type))},text={LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp),modifier=Modifier.heightIn(max=520.dp)){item{OutlinedTextField(name,{name=it},"Name",singleLine=true,modifier=Modifier.fillMaxWidth())};item{OutlinedTextField(description,{description=it},"Description",modifier=Modifier.fillMaxWidth())};item{OutlinedTextField(address,{address=it},"Address",singleLine=true,modifier=Modifier.fillMaxWidth())};item{OutlinedTextField(city,{city=it},"City",singleLine=true,modifier=Modifier.fillMaxWidth())};item{Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){OutlinedTextField(lat,{lat=it},"Latitude",singleLine=true,modifier=Modifier.weight(1f));OutlinedTextField(lon,{lon=it},"Longitude",singleLine=true,modifier=Modifier.weight(1f))}};item{Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){OutlinedButton({val q=if(lat.isNotBlank()&&lon.isNotBlank())"$lat,$lon" else address;context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("geo:0,0?q="+Uri.encode(q))))}){Icon(Icons.Default.Map,null);Spacer(Modifier.width(4.dp));Text("Open Map")};OutlinedButton({picker.launch("image/*")},enabled=!busy){Icon(Icons.Default.Photo,null);Spacer(Modifier.width(4.dp));Text(if(busy)"Uploading…" else "Upload Image")}};item{OutlinedTextField(imageUrl,{imageUrl=it},"Public image URL (optional)",singleLine=true,modifier=Modifier.fillMaxWidth())};item{OutlinedTextField(phone,{phone=it},"Phone",singleLine=true,modifier=Modifier.fillMaxWidth())};item{OutlinedTextField(email,{email=it},"Email",singleLine=true,modifier=Modifier.fillMaxWidth())};item{OutlinedTextField(website,{website=it},"Website",singleLine=true,modifier=Modifier.fillMaxWidth())}}},confirmButton={Button(enabled=!busy&&name.isNotBlank(),onClick={scope.launch{busy=true;val body=JSONObject().put("name",name.trim()).put("description",description).put("address",address).put("city",city).put("imageUrl",imageUrl).put("phone",phone).put("email",email).put("website",website);lat.toDoubleOrNull()?.let{body.put("latitude",it)};lon.toDoubleOrNull()?.let{body.put("longitude",it)};val r=if(existing==null)api.post("/admin/content/$type",body)else api.patch("/admin/content/$type/${existing.id}",body);r.onSuccess{onDone()}.onFailure{onError(it.message?:"Save failed")};busy=false}}){Text(if(existing==null)"Create" else "Save")}},dismissButton={TextButton(onClick=onDone){Text("Cancel")}})
+@Composable
+private fun ContentForm(
+    api: ApiClient,
+    type: String,
+    existing: ContentItem?,
+    onDone: () -> Unit,
+    onError: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var name by remember { mutableStateOf(existing?.name.orEmpty()) }
+    var description by remember { mutableStateOf(existing?.description.orEmpty()) }
+    var address by remember { mutableStateOf(existing?.address.orEmpty()) }
+    var city by remember { mutableStateOf(existing?.city.orEmpty()) }
+    var lat by remember { mutableStateOf(existing?.latitude?.toString().orEmpty()) }
+    var lon by remember { mutableStateOf(existing?.longitude?.toString().orEmpty()) }
+    var imageUrl by remember { mutableStateOf(existing?.imageUrl.orEmpty()) }
+    var phone by remember { mutableStateOf(existing?.phone.orEmpty()) }
+    var email by remember { mutableStateOf(existing?.email.orEmpty()) }
+    var website by remember { mutableStateOf(existing?.website.orEmpty()) }
+    var busy by remember { mutableStateOf(false) }
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            scope.launch {
+                busy = true
+                api.uploadContentImage(uri)
+                    .onSuccess { imageUrl = it }
+                    .onFailure { onError(it.message ?: "Image upload failed") }
+                busy = false
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDone,
+        title = { Text(if (existing == null) "Add " + typeLabel(type) else "Edit " + typeLabel(type)) },
+        text = {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.heightIn(max = 520.dp)
+            ) {
+                item {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text("Description") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        value = address,
+                        onValueChange = { address = it },
+                        label = { Text("Address") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        value = city,
+                        onValueChange = { city = it },
+                        label = { Text("City") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = lat,
+                            onValueChange = { lat = it },
+                            label = { Text("Latitude") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = lon,
+                            onValueChange = { lon = it },
+                            label = { Text("Longitude") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                val query = if (lat.isNotBlank() && lon.isNotBlank()) lat + "," + lon else address
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(query)))
+                                )
+                            }
+                        ) {
+                            Icon(Icons.Default.Map, null)
+                            Spacer(Modifier.width(4.dp))
+                            Text("Open Map")
+                        }
+                        OutlinedButton(
+                            onClick = { picker.launch("image/*") },
+                            enabled = !busy
+                        ) {
+                            Icon(Icons.Default.Photo, null)
+                            Spacer(Modifier.width(4.dp))
+                            Text(if (busy) "Uploading…" else "Upload Image")
+                        }
+                    }
+                }
+                item {
+                    OutlinedTextField(
+                        value = imageUrl,
+                        onValueChange = { imageUrl = it },
+                        label = { Text("Public image URL (optional)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        value = phone,
+                        onValueChange = { phone = it },
+                        label = { Text("Phone") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        label = { Text("Email") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        value = website,
+                        onValueChange = { website = it },
+                        label = { Text("Website") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = !busy && name.isNotBlank(),
+                onClick = {
+                    scope.launch {
+                        busy = true
+                        val body = JSONObject()
+                            .put("name", name.trim())
+                            .put("description", description)
+                            .put("address", address)
+                            .put("city", city)
+                            .put("imageUrl", imageUrl)
+                            .put("phone", phone)
+                            .put("email", email)
+                            .put("website", website)
+                        lat.toDoubleOrNull()?.let { body.put("latitude", it) }
+                        lon.toDoubleOrNull()?.let { body.put("longitude", it) }
+                        val result = if (existing == null) {
+                            api.post("/admin/content/" + type, body)
+                        } else {
+                            api.patch("/admin/content/" + type + "/" + existing.id, body)
+                        }
+                        result
+                            .onSuccess { onDone() }
+                            .onFailure { onError(it.message ?: "Save failed") }
+                        busy = false
+                    }
+                }
+            ) {
+                Text(if (existing == null) "Create" else "Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDone) { Text("Cancel") }
+        }
+    )
 }
-private fun typeLabel(type:String)=when(type){"homestays"->"Home Stay";"sponsors"->"Sponsor";else->"Business Partner"}
-private fun JSONObject.optDoubleOrNull(key:String):Double?=if(has(key)&&!isNull(key))optDouble(key).takeIf{!it.isNaN()}else null
+
+private fun typeLabel(type: String) = when (type) {
+    "homestays" -> "Home Stay"
+    "sponsors" -> "Sponsor"
+    else -> "Business Partner"
+}
+
+private fun JSONObject.optDoubleOrNull(key: String): Double? =
+    if (has(key) && !isNull(key)) optDouble(key).takeIf { !it.isNaN() } else null
