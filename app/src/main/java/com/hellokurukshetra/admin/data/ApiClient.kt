@@ -1,12 +1,17 @@
 package com.hellokurukshetra.admin.data
 
 import android.content.Context
+import android.net.Uri
 import android.util.Base64
 import com.hellokurukshetra.admin.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -50,6 +55,36 @@ class ApiClient(context: Context) {
     suspend fun post(path: String, body: JSONObject? = null) = request(path, "POST", body, true)
     suspend fun patch(path: String, body: JSONObject) = request(path, "PATCH", body, true)
     suspend fun put(path: String, body: JSONObject) = request(path, "PUT", body, true)
+
+    suspend fun uploadContentImage(uri: Uri): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val resolver = appContext.contentResolver
+            val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: error("Unable to read image")
+            require(bytes.isNotEmpty()) { "Empty image" }
+            require(bytes.size <= 10 * 1024 * 1024) { "Image must be 10 MB or smaller" }
+            val signature = get("/admin/content-image/upload-signature").getOrThrow()
+                .optJSONObject("data") ?: error("Upload authorization failed")
+            val mime = resolver.getType(uri) ?: "image/jpeg"
+            require(mime.startsWith("image/")) { "Please select an image file" }
+            val body = MultipartBody.Builder().setType(MultipartBody.FORM)
+                .addFormDataPart("file", "admin-content.jpg", bytes.toRequestBody(mime.toMediaType()))
+                .addFormDataPart("public_id", signature.getString("publicId"))
+                .addFormDataPart("timestamp", signature.getLong("timestamp").toString())
+                .addFormDataPart("api_key", signature.getString("apiKey"))
+                .addFormDataPart("signature", signature.getString("signature"))
+                .build()
+            val request = Request.Builder()
+                .url("https://api.cloudinary.com/v1_1/${signature.getString("cloudName")}/image/upload")
+                .post(body)
+                .build()
+            client.newCall(request).execute().use { response ->
+                val raw = response.body?.string().orEmpty()
+                if (!response.isSuccessful) error("Image upload failed")
+                val json = JSONObject(raw)
+                json.optString("secure_url").takeIf { it.isNotBlank() } ?: error("Cloud image URL missing")
+            }
+        }
+    }
 
     private suspend fun request(
         path: String,
