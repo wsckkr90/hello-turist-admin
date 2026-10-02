@@ -1,5 +1,7 @@
 package com.hellokurukshetra.admin.feature.rides
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.material3.*
@@ -11,6 +13,7 @@ import com.hellokurukshetra.admin.data.ApiClient
 import com.hellokurukshetra.admin.ui.*
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.util.Locale
 
 @Composable
 fun RidesScreen(api: ApiClient) {
@@ -148,14 +151,57 @@ fun RidesScreen(api: ApiClient) {
             title = { Text("Ride details") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Text("Rider: " + row.optJSONObject("rider")?.optString("name", "—"))
+                    val rider = row.optJSONObject("rider")
+                    Text("Rider", style = MaterialTheme.typography.labelLarge)
+                    Text(rider?.optString("name", "—") + " • " + rider?.optString("username", "—"))
                     Text("Status: " + row.optString("status", "—"))
                     Text("Pickup: " + row.optString("pickupAddress", "—"))
                     Text("Drop-off: " + row.optString("dropoffAddress", "—"))
                     Text("Created: " + row.optString("createdAt", "—"))
                     Text("Updated: " + row.optString("updatedAt", "—"))
-                    Text("Assignments: " + (row.optJSONArray("assignments")?.length() ?: 0))
-                    Text("Events: " + (row.optJSONArray("events")?.length() ?: 0))
+                    Text("Driver assignments", style = MaterialTheme.typography.labelLarge)
+                    val assignments = row.optJSONArray("assignments")
+                    if (assignments == null || assignments.length() == 0) {
+                        Text("No driver assigned yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        repeat(assignments.length()) { index ->
+                            val a = assignments.optJSONObject(index) ?: JSONObject()
+                            val d = a.optJSONObject("driver")
+                            Text("• " + (d?.optString("name", "Unknown driver") ?: "Unknown driver") + " — " + a.optString("status", "—"))
+                        }
+                    }
+                    Text("Location history", style = MaterialTheme.typography.labelLarge)
+                    val locations = row.optJSONArray("locations")
+                    if (locations == null || locations.length() == 0) {
+                        Text("No location points recorded.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        repeat(locations.length()) { index ->
+                            val point = locations.optJSONObject(index) ?: JSONObject()
+                            val lat = point.optString("latitude")
+                            val lon = point.optString("longitude")
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(String.format(Locale.US, "%s, %s", lat, lon), modifier = Modifier.weight(1f))
+                                TextButton(onClick = {
+                                    val uri = Uri.parse("geo:$lat,$lon?q=$lat,$lon")
+                                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+                                }) { Text("Map") }
+                            }
+                        }
+                    }
+                    Text("Safety media", style = MaterialTheme.typography.labelLarge)
+                    val mediaEvents = row.optJSONArray("events")?.let { events ->
+                        (0 until events.length()).mapNotNull { i ->
+                            events.optJSONObject(i)?.takeIf { it.optJSONObject("payload")?.optString("kind") == "RECORDING_UPLOADED" }
+                        }
+                    }.orEmpty()
+                    if (mediaEvents.isEmpty()) {
+                        Text("No audio/video recording attached.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        mediaEvents.forEach { event ->
+                            val payload = event.optJSONObject("payload") ?: JSONObject()
+                            Text("• " + payload.optString("media", "MEDIA") + " • " + payload.optString("contentType", "—") + " • " + payload.optString("expiresAt", ""))
+                        }
+                    }
                 }
             },
             confirmButton = { TextButton(onClick = { selected = null }) { Text("Close") } }
