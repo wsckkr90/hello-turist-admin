@@ -127,25 +127,117 @@ fun PeopleScreen(api: ApiClient) {
 }
 
 @Composable
-private fun PersonForm(api: ApiClient, existing: JSONObject?, onDone: () -> Unit, onError: (String) -> Unit) {
-    val scope=rememberCoroutineScope()
+private fun PersonForm(
+    api: ApiClient,
+    existing: JSONObject?,
+    onDone: () -> Unit,
+    onError: (String) -> Unit
+) {
+    val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf(existing?.optString("name").orEmpty()) }
     var username by remember { mutableStateOf(existing?.optString("username").orEmpty()) }
     var email by remember { mutableStateOf(existing?.optString("email").orEmpty()) }
     var phone by remember { mutableStateOf(existing?.optString("phone").orEmpty()) }
     var password by remember { mutableStateOf("") }
-    var role by remember { mutableStateOf(existing?.optJSONArray("roles")?.optJSONObject(0)?.optString("role") ?: "RIDER") }
+    var role by remember {
+        mutableStateOf(
+            existing?.optJSONArray("roles")?.optJSONObject(0)?.optString("role") ?: "RIDER"
+        )
+    }
     var busy by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest=onDone,title={Text(if(existing==null)"Add person" else "Edit person")},text={
-        Column(verticalArrangement=Arrangement.spacedBy(8.dp),modifier=Modifier.heightIn(max=520.dp)) {
-            OutlinedTextField(name,{name=it},"Name",singleLine=true,modifier=Modifier.fillMaxWidth())
-            OutlinedTextField(username,{username=it},"Username",singleLine=true,modifier=Modifier.fillMaxWidth())
-            OutlinedTextField(email,{email=it},"Email",singleLine=true,modifier=Modifier.fillMaxWidth())
-            OutlinedTextField(phone,{phone=it},"Phone",singleLine=true,modifier=Modifier.fillMaxWidth())
-            OutlinedTextField(password,{password=it},"Password ${if(existing==null)"(8+ chars required)" else "(optional)"}",singleLine=true,modifier=Modifier.fillMaxWidth())
-            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){listOf("RIDER","DRIVER","GUIDE").forEach{r->FilterChip(role==r,{role=r},{Text(r)})}}
+
+    AlertDialog(
+        onDismissRequest = onDone,
+        title = { Text(if (existing == null) "Add person" else "Edit person") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.heightIn(max = 520.dp)
+            ) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text("Username") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("Email") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = { phone = it },
+                    label = { Text("Phone") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = {
+                        Text(if (existing == null) "Password (8+ chars required)" else "Password (optional)")
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("RIDER", "DRIVER", "GUIDE").forEach { selectedRole ->
+                        FilterChip(
+                            selected = role == selectedRole,
+                            onClick = { role = selectedRole },
+                            label = { Text(selectedRole) }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = !busy &&
+                    name.isNotBlank() &&
+                    username.isNotBlank() &&
+                    (existing != null || password.length >= 8),
+                onClick = {
+                    scope.launch {
+                        busy = true
+                        val body = JSONObject()
+                            .put("name", name.trim())
+                            .put("username", username.trim())
+                            .put("email", email)
+                            .put("phone", phone)
+                            .put("role", role)
+                        if (password.isNotBlank()) body.put("password", password)
+
+                        val result = if (existing == null) {
+                            api.post("/admin/people", body)
+                        } else {
+                            api.patch("/admin/people/" + existing.optString("id"), body)
+                        }
+                        result
+                            .onSuccess { onDone() }
+                            .onFailure { onError(it.message ?: "Save failed") }
+                        busy = false
+                    }
+                }
+            ) {
+                Text(if (existing == null) "Create" else "Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDone) { Text("Cancel") }
         }
-    },confirmButton={Button(enabled=!busy&&name.isNotBlank()&&username.isNotBlank()&&(existing!=null||password.length>=8),onClick={scope.launch{busy=true;val body=JSONObject().put("name",name.trim()).put("username",username.trim()).put("email",email).put("phone",phone).put("role",role);if(password.isNotBlank())body.put("password",password);val r=if(existing==null)api.post("/admin/people",body)else api.patch("/admin/people/${existing.optString("id")}",body);r.onSuccess{onDone()}.onFailure{onError(it.message?:"Save failed")};busy=false}}){Text(if(existing==null)"Create" else "Save")}},dismissButton={TextButton(onClick=onDone){Text("Cancel")}})
+    )
 }
 
 private fun stringArrayFromRoles(row: JSONObject): List<String> {
