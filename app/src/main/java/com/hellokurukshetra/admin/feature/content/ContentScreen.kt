@@ -2,8 +2,6 @@ package com.hellokurukshetra.admin.feature.content
 
 import android.content.Intent
 import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -44,7 +42,7 @@ fun ContentScreen(api: ApiClient) {
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){Button({editing=null;showForm=true}){Icon(Icons.Default.Add,null);Spacer(Modifier.width(6.dp));Text("Add")};OutlinedButton({reload()},enabled=!loading){Text(if(loading)"Refreshing…" else "Refresh")}}
         error?.let{Text(it,color=MaterialTheme.colorScheme.error,modifier=Modifier.padding(vertical=8.dp))}
-        LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){items(items,key={it.id}){item->Card{Row(Modifier.fillMaxWidth().padding(14.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)){Column(Modifier.weight(1f)){Text(item.name,style=MaterialTheme.typography.titleMedium);Text(listOfNotNull(item.city,item.address).joinToString(" • "),style=MaterialTheme.typography.bodySmall);item.imageUrl?.let{Text("Image attached",style=MaterialTheme.typography.labelSmall)};if(item.latitude!=null&&item.longitude!=null)Text("Location: "+String.format(Locale.US,"%.5f",item.latitude)+", "+String.format(Locale.US,"%.5f",item.longitude),style=MaterialTheme.typography.labelSmall)};IconButton({editing=item;showForm=true}){Icon(Icons.Default.Edit,"Edit")};IconButton({scope.launch{api.delete("/admin/content/$type/${item.id}").onSuccess{reload()}.onFailure{error=it.message}}}){Icon(Icons.Default.Delete,"Deactivate")}}}}}
+        LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){items(items,key={it.id}){item->Card{Row(Modifier.fillMaxWidth().padding(14.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)){Column(Modifier.weight(1f)){Text(item.name,style=MaterialTheme.typography.titleMedium);Text(listOfNotNull(item.city,item.address).joinToString(" • "),style=MaterialTheme.typography.bodySmall);item.imageUrl?.let{Text("Image attached",style=MaterialTheme.typography.labelSmall)};if(item.latitude!=null&&item.longitude!=null)Text("Location: "+String.format(Locale.US,"%.5f",item.latitude)+", "+String.format(Locale.US,"%.5f",item.longitude),style=MaterialTheme.typography.labelSmall)};IconButton({editing=item;showForm=true}){Icon(Icons.Default.Edit,"Edit")};IconButton({scope.launch{api.patch("/admin/content/$type/${item.id}",JSONObject().put("isActive",false)).onSuccess{reload()}.onFailure{error=it.message}}}){Icon(Icons.Default.Delete,"Deactivate")}}}}}
     }
     if(showForm)ContentForm(api,type,editing,{showForm=false;reload()},{error=it})
 }
@@ -69,18 +67,6 @@ private fun ContentForm(
     var email by remember { mutableStateOf(existing?.email.orEmpty()) }
     var website by remember { mutableStateOf(existing?.website.orEmpty()) }
     var busy by remember { mutableStateOf(false) }
-
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            scope.launch {
-                busy = true
-                api.uploadContentImage(uri)
-                    .onSuccess { imageUrl = it }
-                    .onFailure { onError(it.message ?: "Image upload failed") }
-                busy = false
-            }
-        }
-    }
 
     AlertDialog(
         onDismissRequest = onDone,
@@ -158,12 +144,11 @@ private fun ContentForm(
                             Text("Open Map")
                         }
                         OutlinedButton(
-                            onClick = { picker.launch("image/*") },
-                            enabled = !busy
+                            onClick = { onError("Enter a public HTTPS image URL in the field below.") }
                         ) {
                             Icon(Icons.Default.Photo, null)
                             Spacer(Modifier.width(4.dp))
-                            Text(if (busy) "Uploading…" else "Upload Image")
+                            Text("Use Image URL")
                         }
                     }
                 }
