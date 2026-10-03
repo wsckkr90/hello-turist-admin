@@ -113,11 +113,12 @@ class ApiClient(context: Context) {
     }
 
     @Synchronized
-    private fun refresh(token: String): Boolean = try {
-        val current = sessionStore.get("refresh_token")
-        if (!current.isNullOrBlank() && current != token) {
-            return !sessionStore.get("access_token").isNullOrBlank()
-        }
+    private fun refresh(token: String): Boolean {
+        return try {
+            val current = sessionStore.get("refresh_token")
+            if (!current.isNullOrBlank() && current != token) {
+                return !sessionStore.get("access_token").isNullOrBlank()
+            }
 
         val request = Request.Builder()
             .url(baseUrl + "auth/refresh")
@@ -142,6 +143,7 @@ class ApiClient(context: Context) {
         }
     } catch (_: Exception) {
         false
+    }
     }
 
     fun saveSession(data: JSONObject) {
