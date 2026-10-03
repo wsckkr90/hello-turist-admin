@@ -1,24 +1,20 @@
 package com.hellokurukshetra.admin.data
 
 import android.content.Context
-import android.net.Uri
 import android.util.Base64
 import com.hellokurukshetra.admin.BuildConfig
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import java.net.UnknownHostException
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import java.security.SecureRandom
 import java.util.UUID
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -28,63 +24,25 @@ import javax.crypto.spec.GCMParameterSpec
 class ApiClient(context: Context) {
     private val appContext = context.applicationContext
     private val prefs = appContext.getSharedPreferences("admin_session", Context.MODE_PRIVATE)
-    private val previewMode = prefs.getBoolean("preview_mode", false)
     private val client = OkHttpClient()
     private val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/') + "/"
-    private val sessionStore by lazy { SessionStore(prefs) }
-    @Volatile private var loggedIn = false
+    private val sessionStore = SessionStore(prefs)
 
-    init {
-        // Android Studio Compose Preview must not initialize Android Keystore
-        // or make real network calls. PreviewApi enables this mode explicitly.
-        loggedIn = if (previewMode) false else !sessionStore.get("access_token").isNullOrBlank()
-    }
-
-    fun isLoggedIn() = loggedIn
+    fun isLoggedIn() = !sessionStore.get("access_token").isNullOrBlank()
 
     fun logout() {
         prefs.edit().clear().apply()
-        loggedIn = false
     }
 
     suspend fun login(identifier: String, password: String) =
-        request("/auth/login", "POST", JSONObject().put("identifier", identifier.trim()).put("password", password), false)
+        request("/auth/login", "POST", JSONObject()
+            .put("identifier", identifier.trim())
+            .put("password", password), false)
 
     suspend fun get(path: String) = request(path, "GET", null, true)
-    suspend fun delete(path: String) = request(path, "DELETE", null, true)
     suspend fun post(path: String, body: JSONObject? = null) = request(path, "POST", body, true)
     suspend fun patch(path: String, body: JSONObject) = request(path, "PATCH", body, true)
     suspend fun put(path: String, body: JSONObject) = request(path, "PUT", body, true)
-
-    suspend fun uploadContentImage(uri: Uri): Result<String> = withContext(Dispatchers.IO) {
-        runCatching {
-            val resolver = appContext.contentResolver
-            val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: error("Unable to read image")
-            require(bytes.isNotEmpty()) { "Empty image" }
-            require(bytes.size <= 10 * 1024 * 1024) { "Image must be 10 MB or smaller" }
-            val signature = get("/admin/content-image/upload-signature").getOrThrow()
-                .optJSONObject("data") ?: error("Upload authorization failed")
-            val mime = resolver.getType(uri) ?: "image/jpeg"
-            require(mime.startsWith("image/")) { "Please select an image file" }
-            val body = MultipartBody.Builder().setType(MultipartBody.FORM)
-                .addFormDataPart("file", "admin-content.jpg", bytes.toRequestBody(mime.toMediaType()))
-                .addFormDataPart("public_id", signature.getString("publicId"))
-                .addFormDataPart("timestamp", signature.getLong("timestamp").toString())
-                .addFormDataPart("api_key", signature.getString("apiKey"))
-                .addFormDataPart("signature", signature.getString("signature"))
-                .build()
-            val request = Request.Builder()
-                .url("https://api.cloudinary.com/v1_1/${signature.getString("cloudName")}/image/upload")
-                .post(body)
-                .build()
-            client.newCall(request).execute().use { response ->
-                val raw = response.body?.string().orEmpty()
-                if (!response.isSuccessful) error("Image upload failed")
-                val json = JSONObject(raw)
-                json.optString("secure_url").takeIf { it.isNotBlank() } ?: error("Cloud image URL missing")
-            }
-        }
-    }
 
     private suspend fun request(
         path: String,
@@ -93,134 +51,103 @@ class ApiClient(context: Context) {
         auth: Boolean,
         retry: Boolean = true
     ): Result<JSONObject> = withContext(Dispatchers.IO) {
-        if (previewMode) {
-            return@withContext Result.success(previewResponse(path, method))
-        }
+        try {
+            val builder = Request.Builder()
+                .url(baseUrl + path.trimStart('/'))
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
 
-        var dnsAttempt = 0
-        var result: Result<JSONObject>? = null
+            sessionStore.get("access_token")
+                ?.takeIf { auth && it.isNotBlank() }
+                ?.let { builder.header("Authorization", "Bearer $it") }
 
-        while (result == null) {
-            try {
-                val builder = Request.Builder()
-                    .url(baseUrl + path.trimStart('/'))
-                    .header("Accept", "application/json")
-                    .header("Content-Type", "application/json")
-
-                sessionStore.get("access_token")
-                    ?.takeIf { auth && it.isNotBlank() }
-                    ?.let { builder.header("Authorization", "Bearer $it") }
-
-                if (auth && method != "GET") {
-                    builder.header("Idempotency-Key", UUID.randomUUID().toString())
-                }
-
-                val requestBody = body?.toString()?.toRequestBody("application/json".toMediaType())
-                when (method) {
-                    "POST" -> builder.post(requestBody ?: ByteArray(0).toRequestBody(null))
-                    "PATCH" -> builder.patch(requestBody ?: ByteArray(0).toRequestBody(null))
-                    "PUT" -> builder.put(requestBody ?: ByteArray(0).toRequestBody(null))
-                    "DELETE" -> builder.delete(requestBody)
-                    else -> builder.get()
-                }
-
-                val response = client.newCall(builder.build()).execute()
-                try {
-                    val raw = response.body?.string().orEmpty()
-                    val json = runCatching {
-                        JSONObject(if (raw.isBlank()) "{}" else raw)
-                    }.getOrElse {
-                        JSONObject().put("raw", raw)
-                    }
-
-                    if (response.code == 401 && auth && retry) {
-                        val refreshToken = sessionStore.get("refresh_token")
-                        if (!refreshToken.isNullOrBlank() && refresh(refreshToken)) {
-                            result = request(path, method, body, auth, false)
-                        } else {
-                            logout()
-                        }
-                    }
-
-                    if (result == null && !response.isSuccessful) {
-                        val msg = json.optJSONObject("error")?.optString("message")?.takeIf { it.isNotBlank() }
-                            ?: json.optString("message").takeIf { it.isNotBlank() }
-                            ?: "Request failed (" + response.code + ")"
-                        result = Result.failure(IllegalStateException(msg))
-                    }
-
-                    if (result == null && response.isSuccessful) {
-                        result = Result.success(json)
-                    }
-                } finally {
-                    response.close()
-                }
-            } catch (e: UnknownHostException) {
-                if (dnsAttempt >= 2) {
-                    result = Result.failure(
-                        IllegalStateException(
-                            "Cannot connect to the backend. Please check your internet connection and try again.",
-                            e
-                        )
-                    )
-                } else {
-                    dnsAttempt++
-                    delay(700L * dnsAttempt)
-                }
-            } catch (e: Exception) {
-                result = Result.failure(e)
+            if (auth && method != "GET") {
+                builder.header("Idempotency-Key", UUID.randomUUID().toString())
             }
+
+            val requestBody = body?.toString()?.toRequestBody("application/json".toMediaType())
+            when (method) {
+                "POST" -> builder.post(requestBody ?: ByteArray(0).toRequestBody(null))
+                "PATCH" -> builder.patch(requestBody ?: ByteArray(0).toRequestBody(null))
+                "PUT" -> builder.put(requestBody ?: ByteArray(0).toRequestBody(null))
+                else -> builder.get()
+            }
+
+            client.newCall(builder.build()).execute().use { response ->
+                val raw = response.body?.string().orEmpty()
+                val json = runCatching {
+                    JSONObject(if (raw.isBlank()) "{}" else raw)
+                }.getOrElse {
+                    JSONObject().put("raw", raw)
+                }
+
+                if (response.code == 401 && auth && retry) {
+                    val refreshToken = sessionStore.get("refresh_token")
+                    if (!refreshToken.isNullOrBlank() && refresh(refreshToken)) {
+                        return@withContext request(path, method, body, auth, false)
+                    }
+                    logout()
+                }
+
+                if (!response.isSuccessful) {
+                    val errorObject = json.optJSONObject("error")
+                    val code = errorObject?.optString("code")?.takeIf { it.isNotBlank() }
+                        ?: json.optString("errorCode").takeIf { it.isNotBlank() }
+                    val msg = errorObject?.optString("message")?.takeIf { it.isNotBlank() }
+                        ?: json.optString("message").takeIf { it.isNotBlank() }
+                        ?: "Request failed (" + response.code + ")"
+                    val requestId = json.optString("requestId").takeIf { it.isNotBlank() }
+                    val diagnostic = buildString {
+                        if (!code.isNullOrBlank()) append(code).append(": ")
+                        append(msg)
+                        if (!requestId.isNullOrBlank()) append(" [requestId=").append(requestId).append("]")
+                    }
+                    return@withContext Result.failure(IllegalStateException(diagnostic))
+                }
+
+                Result.success(json)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-
-        result ?: Result.failure(IllegalStateException("Request did not produce a result"))
-    }
-
-    private fun previewResponse(path: String, method: String): JSONObject {
-        return JSONObject()
-            .put("items", org.json.JSONArray())
-            .put("data", JSONObject())
-            .put("kpis", JSONObject())
-            .put("breakdowns", JSONObject())
-            .put("pagination", JSONObject().put("page", 1).put("totalPages", 1).put("total", 0))
-            .put("raw", JSONObject().put("preview", true).put("path", path).put("method", method))
     }
 
     @Synchronized
-    private fun refresh(token: String): Boolean {
-        return try {
-            val current = sessionStore.get("refresh_token")
-            if (!current.isNullOrBlank() && current != token) {
-                return !sessionStore.get("access_token").isNullOrBlank()
-            }
-
-            val request = Request.Builder()
-                .url(baseUrl + "auth/refresh")
-                .post(JSONObject().put("refreshToken", token).toString().toRequestBody("application/json".toMediaType()))
-                .header("Content-Type", "application/json")
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return false
-                val data = JSONObject(response.body?.string().orEmpty()).optJSONObject("data") ?: return false
-                val access = data.optString("accessToken")
-                val refresh = data.optString("refreshToken")
-                if (access.isBlank()) return false
-                sessionStore.put("access_token", access)
-                if (refresh.isNotBlank()) sessionStore.put("refresh_token", refresh)
-                true
-            }
-        } catch (_: Exception) {
-            false
+    private fun refresh(token: String): Boolean = try {
+        val current = sessionStore.get("refresh_token")
+        if (!current.isNullOrBlank() && current != token) {
+            return !sessionStore.get("access_token").isNullOrBlank()
         }
+
+        val request = Request.Builder()
+            .url(baseUrl + "auth/refresh")
+            .post(
+                JSONObject().put("refreshToken", token)
+                    .toString()
+                    .toRequestBody("application/json".toMediaType())
+            )
+            .header("Content-Type", "application/json")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return false
+            val data = JSONObject(response.body?.string().orEmpty())
+                .optJSONObject("data") ?: return false
+            val access = data.optString("accessToken")
+            val refresh = data.optString("refreshToken")
+            if (access.isBlank()) return false
+            sessionStore.put("access_token", access)
+            if (refresh.isNotBlank()) sessionStore.put("refresh_token", refresh)
+            true
+        }
+    } catch (_: Exception) {
+        false
     }
 
     fun saveSession(data: JSONObject) {
         val access = data.optString("accessToken")
         val refresh = data.optString("refreshToken")
-        if (access.isNotBlank()) {
-            sessionStore.put("access_token", access)
-            loggedIn = true
-        }
+        if (access.isNotBlank()) sessionStore.put("access_token", access)
         if (refresh.isNotBlank()) sessionStore.put("refresh_token", refresh)
     }
 }
@@ -234,24 +161,28 @@ private class SessionStore(private val prefs: android.content.SharedPreferences)
         (keyStore.getKey(alias, null) as? SecretKey)?.let { return it }
         val generator = KeyGenerator.getInstance("AES", "AndroidKeyStore")
         generator.init(
-            KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+            KeyGenParameterSpec.Builder(
+                alias,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+            )
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(256)
-                .build()
+                .build(),
         )
-        return generator.generateKey()
+        return generator.generateKey().also {
+            // AndroidKeyStore persists the generated key under the alias.
+        }
     }
 
     fun put(name: String, value: String) {
         val secret = key()
-        // Let Android Keystore generate the GCM IV. Some Android Keystore
-        // implementations reject caller-provided IVs for randomized encryption.
+        val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
         val cipher = Cipher.getInstance(transformation)
-        cipher.init(Cipher.ENCRYPT_MODE, secret)
-        val iv = cipher.iv
+        cipher.init(Cipher.ENCRYPT_MODE, secret, GCMParameterSpec(128, iv))
         val encrypted = cipher.doFinal(value.toByteArray(StandardCharsets.UTF_8))
-        prefs.edit().putString(name, Base64.encodeToString(iv + encrypted, Base64.NO_WRAP)).apply()
+        val payload = Base64.encodeToString(iv + encrypted, Base64.NO_WRAP)
+        prefs.edit().putString(name, payload).apply()
     }
 
     fun get(name: String): String? {
