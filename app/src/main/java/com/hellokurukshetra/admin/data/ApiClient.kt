@@ -28,15 +28,16 @@ import javax.crypto.spec.GCMParameterSpec
 class ApiClient(context: Context) {
     private val appContext = context.applicationContext
     private val prefs = appContext.getSharedPreferences("admin_session", Context.MODE_PRIVATE)
+    private val previewMode = prefs.getBoolean("preview_mode", false)
     private val client = OkHttpClient()
     private val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/') + "/"
-    private val sessionStore = SessionStore(prefs)
+    private val sessionStore by lazy { SessionStore(prefs) }
     @Volatile private var loggedIn = false
 
     init {
-        // ApiClient is constructed from MainActivity on Dispatchers.IO.
-        // Keep this Keystore-backed check out of the Compose/UI thread.
-        loggedIn = !sessionStore.get("access_token").isNullOrBlank()
+        // Android Studio Compose Preview must not initialize Android Keystore
+        // or make real network calls. PreviewApi enables this mode explicitly.
+        loggedIn = if (previewMode) false else !sessionStore.get("access_token").isNullOrBlank()
     }
 
     fun isLoggedIn() = loggedIn
@@ -92,6 +93,10 @@ class ApiClient(context: Context) {
         auth: Boolean,
         retry: Boolean = true
     ): Result<JSONObject> = withContext(Dispatchers.IO) {
+        if (previewMode) {
+            return@withContext Result.success(previewResponse(path, method))
+        }
+
         var dnsAttempt = 0
         var result: Result<JSONObject>? = null
 
@@ -168,6 +173,16 @@ class ApiClient(context: Context) {
         }
 
         result ?: Result.failure(IllegalStateException("Request did not produce a result"))
+    }
+
+    private fun previewResponse(path: String, method: String): JSONObject {
+        return JSONObject()
+            .put("items", org.json.JSONArray())
+            .put("data", JSONObject())
+            .put("kpis", JSONObject())
+            .put("breakdowns", JSONObject())
+            .put("pagination", JSONObject().put("page", 1).put("totalPages", 1).put("total", 0))
+            .put("raw", JSONObject().put("preview", true).put("path", path).put("method", method))
     }
 
     @Synchronized
