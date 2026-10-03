@@ -90,11 +90,19 @@ class ApiClient(context: Context) {
                 }
 
                 if (!response.isSuccessful) {
-                    val msg = json.optJSONObject("error")?.optString("message")
-                        ?.takeIf { it.isNotBlank() }
+                    val errorObject = json.optJSONObject("error")
+                    val code = errorObject?.optString("code")?.takeIf { it.isNotBlank() }
+                        ?: json.optString("errorCode").takeIf { it.isNotBlank() }
+                    val msg = errorObject?.optString("message")?.takeIf { it.isNotBlank() }
                         ?: json.optString("message").takeIf { it.isNotBlank() }
                         ?: "Request failed (" + response.code + ")"
-                    return@withContext Result.failure(IllegalStateException(msg))
+                    val requestId = json.optString("requestId").takeIf { it.isNotBlank() }
+                    val diagnostic = buildString {
+                        if (!code.isNullOrBlank()) append(code).append(": ")
+                        append(msg)
+                        if (!requestId.isNullOrBlank()) append(" [requestId=").append(requestId).append("]")
+                    }
+                    return@withContext Result.failure(IllegalStateException(diagnostic))
                 }
 
                 Result.success(json)
