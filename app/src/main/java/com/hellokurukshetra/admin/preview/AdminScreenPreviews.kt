@@ -21,7 +21,12 @@ import com.hellokurukshetra.admin.ui.theme.HelloKurukshetraAdminTheme
 
 @Composable
 private fun PreviewApi(content: @Composable (ApiClient) -> Unit) {
-    HelloKurukshetraAdminTheme { content(ApiClient(LocalContext.current)) }
+    val context = LocalContext.current
+    context.getSharedPreferences("admin_session", android.content.Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean("preview_mode", true)
+        .apply()
+    HelloKurukshetraAdminTheme { content(ApiClient(context)) }
 }
 
 @Preview(name = "Admin dashboard", showBackground = true, showSystemUi = true)
