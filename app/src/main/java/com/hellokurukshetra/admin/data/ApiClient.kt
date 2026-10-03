@@ -43,6 +43,7 @@ class ApiClient(context: Context) {
     suspend fun post(path: String, body: JSONObject? = null) = request(path, "POST", body, true)
     suspend fun patch(path: String, body: JSONObject) = request(path, "PATCH", body, true)
     suspend fun put(path: String, body: JSONObject) = request(path, "PUT", body, true)
+    suspend fun delete(path: String) = request(path, "DELETE", null, true)
 
     private suspend fun request(
         path: String,
@@ -70,6 +71,7 @@ class ApiClient(context: Context) {
                 "POST" -> builder.post(requestBody ?: ByteArray(0).toRequestBody(null))
                 "PATCH" -> builder.patch(requestBody ?: ByteArray(0).toRequestBody(null))
                 "PUT" -> builder.put(requestBody ?: ByteArray(0).toRequestBody(null))
+                "DELETE" -> builder.delete(requestBody)
                 else -> builder.get()
             }
 
@@ -113,7 +115,7 @@ class ApiClient(context: Context) {
     }
 
     @Synchronized
-    private fun refresh(token: String): Boolean = try {
+    private fun refresh(token: String): Boolean {
         val current = sessionStore.get("refresh_token")
         if (!current.isNullOrBlank() && current != token) {
             return !sessionStore.get("access_token").isNullOrBlank()
@@ -144,6 +146,63 @@ class ApiClient(context: Context) {
         false
     }
 
+    fun saveSession(data: JSONObject) {
+        val access = data.optString("accessToken")
+        val refresh = data.optString("refreshToken")
+        if (access.isNotBlank()) sessionStore.put("access_token", access)
+        if (refresh.isNotBlank()) sessionStore.put("refresh_token", refresh)
+    }
+}
+
+private class SessionStore(private val prefs: android.content.SharedPreferences) {
+    private val alias = "hello_kurukshetra_admin_session_key"
+    private val transformation = "AES/GCM/NoPadding"
+    private val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+
+    private fun key(): SecretKey {
+        (keyStore.getKey(alias, null) as? SecretKey)?.let { return it }
+        val generator = KeyGenerator.getInstance("AES", "AndroidKeyStore")
+        generator.init(
+            KeyGenParameterSpec.Builder(
+                alias,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256)
+                .build(),
+        )
+        return generator.generateKey().also {
+            // AndroidKeyStore persists the generated key under the alias.
+        }
+    }
+
+    fun put(name: String, value: String) {
+        val secret = key()
+        val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
+        val cipher = Cipher.getInstance(transformation)
+        cipher.init(Cipher.ENCRYPT_MODE, secret, GCMParameterSpec(128, iv))
+        val encrypted = cipher.doFinal(value.toByteArray(StandardCharsets.UTF_8))
+        val payload = Base64.encodeToString(iv + encrypted, Base64.NO_WRAP)
+        prefs.edit().putString(name, payload).apply()
+    }
+
+    fun get(name: String): String? {
+        val payload = prefs.getString(name, null) ?: return null
+        return try {
+            val decoded = Base64.decode(payload, Base64.NO_WRAP)
+            if (decoded.size <= 12) return null
+            val iv = decoded.copyOfRange(0, 12)
+            val encrypted = decoded.copyOfRange(12, decoded.size)
+            val cipher = Cipher.getInstance(transformation)
+            cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv))
+            String(cipher.doFinal(encrypted), StandardCharsets.UTF_8)
+        } catch (_: Exception) {
+            prefs.edit().remove(name).apply()
+            null
+        }
+    }
+}
     fun saveSession(data: JSONObject) {
         val access = data.optString("accessToken")
         val refresh = data.optString("refreshToken")
