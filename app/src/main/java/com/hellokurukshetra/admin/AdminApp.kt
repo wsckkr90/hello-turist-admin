@@ -15,6 +15,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.hellokurukshetra.admin.data.ApiClient
 import kotlinx.coroutines.launch
+import java.net.ConnectException
+import java.net.SocketTimeoutException
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -343,9 +345,9 @@ private fun RejectDialog(
 
 @Composable private fun Kpi(label:String,value:Int,m:Modifier){Card(m){Column(Modifier.padding(16.dp)){Text(label,color=Color.Gray);Text(value.toString(),style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold,color=Navy)}}}
 @Composable private fun Breakdown(title:String,json:JSONObject?){if(json==null)return;Card(Modifier.fillMaxWidth()){Column(Modifier.padding(14.dp)){Text(title,fontWeight=FontWeight.Bold);for(k in json.keys())Text(k+": "+json.opt(k),Modifier.padding(top=5.dp))}}}
-@Composable private fun JsonCard(title:String,j:JSONObject){Card(Modifier.fillMaxWidth()){Column(Modifier.padding(14.dp)){Text(title,fontWeight=FontWeight.Bold);Text(compact(j),color=Color.DarkGray)}}}
-@Composable private fun Error(s:String){Card(colors=CardDefaults.cardColors(containerColor=Color(0xFFFFEAEA))){Text(s,Modifier.padding(14.dp),color=Color(0xFF9A0000))}}
-@Composable private fun Empty(){Card(Modifier.fillMaxWidth()){Text("No records found",Modifier.padding(24.dp),color=Color.Gray)}}
+@Composable private fun JsonCard(title:String,j:JSONObject){Card(Modifier.fillMaxWidth()){Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(7.dp)){Icon(Icons.Default.CheckCircle,null,tint=Color(0xFF2E7D32));Text(title,fontWeight=FontWeight.Bold)};Text(compact(j),color=Color.DarkGray)}}}
+@Composable private fun Error(s:String,onRetry:(()->Unit)?=null){Card(colors=CardDefaults.cardColors(containerColor=Color(0xFFFFEAEA)),modifier=Modifier.fillMaxWidth()){Row(Modifier.padding(14.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)){Icon(Icons.Default.Error, null, tint=Color(0xFF9A0000));Column(Modifier.weight(1f)){Text(s,color=Color(0xFF9A0000),fontWeight=FontWeight.Medium);Text("Check your connection or try again.",color=Color(0xFF9A0000),style=MaterialTheme.typography.bodySmall)};if(onRetry!=null)TextButton(onClick=onRetry){Text("Retry")}}}}
+@Composable private fun Empty(){Card(Modifier.fillMaxWidth()){Column(Modifier.padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally,modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.Inbox,null,tint=Color.Gray,modifier=Modifier.size(34.dp));Spacer(Modifier.height(6.dp));Text("No records found",color=Color.Gray);Text("There is nothing to show here yet.",color=Color.Gray,style=MaterialTheme.typography.bodySmall)}}}
 private fun extractVerificationItems(root:JSONObject):List<JSONObject>{
     val candidates = listOf("items","requests","verificationRequests")
     for (key in candidates) {
