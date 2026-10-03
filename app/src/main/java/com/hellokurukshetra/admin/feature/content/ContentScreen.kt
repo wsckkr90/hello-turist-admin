@@ -2,8 +2,6 @@ package com.hellokurukshetra.admin.feature.content
 
 import android.content.Intent
 import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,7 +10,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -69,18 +66,6 @@ private fun ContentForm(
     var email by remember { mutableStateOf(existing?.email.orEmpty()) }
     var website by remember { mutableStateOf(existing?.website.orEmpty()) }
     var busy by remember { mutableStateOf(false) }
-
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            scope.launch {
-                busy = true
-                api.uploadContentImage(uri)
-                    .onSuccess { imageUrl = it }
-                    .onFailure { onError(it.message ?: "Image upload failed") }
-                busy = false
-            }
-        }
-    }
 
     AlertDialog(
         onDismissRequest = onDone,
@@ -156,14 +141,6 @@ private fun ContentForm(
                             Icon(Icons.Default.Map, null)
                             Spacer(Modifier.width(4.dp))
                             Text("Open Map")
-                        }
-                        OutlinedButton(
-                            onClick = { picker.launch("image/*") },
-                            enabled = !busy
-                        ) {
-                            Icon(Icons.Default.Photo, null)
-                            Spacer(Modifier.width(4.dp))
-                            Text(if (busy) "Uploading…" else "Upload Image")
                         }
                     }
                 }
